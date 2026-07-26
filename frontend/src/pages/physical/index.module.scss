@@ -1,0 +1,550 @@
+@use '@/styles/variables.scss' as *;
+
+.physicalPage {
+  min-height: 100vh;
+  background: $color-bg-page;
+}
+
+.tabHeader {
+  display: flex;
+  background: $color-bg-card;
+  padding: 0 $page-padding;
+  border-bottom: 1rpx solid $color-divider;
+  
+  .tabItem {
+    flex: 1;
+    padding: $spacing-lg 0;
+    text-align: center;
+    position: relative;
+    
+    &.active {
+      .tabText {
+        color: $color-primary;
+        font-weight: $font-weight-semibold;
+      }
+      
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 48rpx;
+        height: 4rpx;
+        background: $color-primary;
+        border-radius: 2rpx;
+      }
+    }
+    
+    .tabText {
+      font-size: $font-size-md;
+      color: $color-text-secondary;
+    }
+  }
+}
+
+.container {
+  padding: $page-padding;
+}
+
+.importCard {
+  margin-bottom: $spacing-lg;
+  padding: $spacing-lg;
+  
+  .importHeader {
+    display: flex;
+    align-items: center;
+    margin-bottom: $spacing-lg;
+    
+    .importIcon {
+      width: 100rpx;
+      height: 100rpx;
+      border-radius: $radius-md;
+      margin-right: $spacing-md;
+    }
+    
+    .importInfo {
+      .importTitle {
+        display: block;
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $color-text-primary;
+        margin-bottom: $spacing-xs;
+      }
+      
+      .importDesc {
+        font-size: $font-size-sm;
+        color: $color-text-tertiary;
+      }
+    }
+  }
+  
+  .importActions {
+    display: flex;
+    gap: $spacing-md;
+    
+    button {
+      flex: 1;
+    }
+  }
+}
+
+.exportCard {
+  margin-bottom: $spacing-lg;
+  padding: $spacing-lg;
+  text-align: center;
+  
+  .exportTitle {
+    display: block;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-xs;
+  }
+  
+  .exportDesc {
+    display: block;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    margin-bottom: $spacing-lg;
+  }
+}
+
+.section {
+  .sectionTitle {
+    display: block;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-md;
+  }
+}
+
+.recordCard {
+  margin-bottom: $spacing-md;
+  
+  .recordHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    .recordInfo {
+      .recordStudent {
+        display: block;
+        font-size: $font-size-md;
+        font-weight: $font-weight-medium;
+        color: $color-text-primary;
+        margin-bottom: $spacing-xs;
+      }
+      
+      .recordDate {
+        font-size: $font-size-xs;
+        color: $color-text-tertiary;
+      }
+    }
+    
+    .recordScore {
+      text-align: right;
+      
+      .score {
+        display: block;
+        font-size: $font-size-xl;
+        font-weight: $font-weight-bold;
+        color: $color-primary;
+        margin-bottom: $spacing-xs;
+      }
+    }
+  }
+  
+  .recordArrow {
+    display: flex;
+    justify-content: space-between;
+    padding-top: $spacing-sm;
+    border-top: 1rpx solid $color-divider;
+    margin-top: $spacing-sm;
+    
+    .arrowText {
+      font-size: $font-size-sm;
+      color: $color-primary;
+    }
+    
+    .arrow {
+      font-size: $font-size-lg;
+      color: $color-primary;
+    }
+  }
+}
+
+.studentCard {
+  margin-bottom: $spacing-md;
+  
+  .studentHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-sm;
+    
+    .studentInfo {
+      .studentName {
+        display: block;
+        font-size: $font-size-md;
+        font-weight: $font-weight-medium;
+        color: $color-text-primary;
+        margin-bottom: $spacing-xs;
+      }
+      
+      .studentNo {
+        font-size: $font-size-xs;
+        color: $color-text-tertiary;
+      }
+    }
+  }
+  
+  .studentRecord {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: $spacing-md;
+    padding: $spacing-sm;
+    background: $color-bg-page;
+    border-radius: $radius-sm;
+    
+    .recordLabel {
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+    }
+    
+    .recordValue {
+      font-size: $font-size-sm;
+      color: $color-text-primary;
+    }
+  }
+}
+
+.emptyCard {
+  padding: $spacing-xl * 2;
+  text-align: center;
+  
+  .emptyText {
+    font-size: $font-size-md;
+    color: $color-text-tertiary;
+  }
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1000;
+}
+
+.modalContent {
+  width: 100%;
+  background: $color-bg-card;
+  border-radius: $radius-lg $radius-lg 0 0;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  
+  .modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-lg;
+    border-bottom: 1rpx solid $color-divider;
+    
+    .modalTitle {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+    }
+    
+    .modalClose {
+      font-size: $font-size-xxl;
+      color: $color-text-tertiary;
+      padding: $spacing-sm;
+    }
+  }
+  
+  .modalBody {
+    flex: 1;
+    padding: $spacing-md;
+    overflow: hidden;
+    
+    .selectAll {
+      display: flex;
+      align-items: center;
+      margin-bottom: $spacing-md;
+      
+      .checkbox {
+        width: 40rpx;
+        height: 40rpx;
+        border: 2rpx solid $color-border;
+        border-radius: $radius-sm;
+        margin-right: $spacing-sm;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        &.checked {
+          background: $color-primary;
+          border-color: $color-primary;
+          
+          &::after {
+            content: '✓';
+            color: $color-text-white;
+            font-size: $font-size-sm;
+          }
+        }
+      }
+      
+      .selectAllText {
+        font-size: $font-size-md;
+        color: $color-text-primary;
+      }
+    }
+    
+    .studentList {
+      max-height: 400rpx;
+      
+      .studentItem {
+        display: flex;
+        align-items: center;
+        padding: $spacing-md 0;
+        
+        &:not(:last-child) {
+          border-bottom: 1rpx solid $color-divider;
+        }
+        
+        .checkbox {
+          width: 40rpx;
+          height: 40rpx;
+          border: 2rpx solid $color-border;
+          border-radius: $radius-sm;
+          margin-right: $spacing-md;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          
+          &.checked {
+            background: $color-primary;
+            border-color: $color-primary;
+            
+            &::after {
+              content: '✓';
+              color: $color-text-white;
+              font-size: $font-size-sm;
+            }
+          }
+        }
+        
+        .studentInfo {
+          flex: 1;
+          
+          .studentName {
+            display: block;
+            font-size: $font-size-md;
+            color: $color-text-primary;
+            margin-bottom: $spacing-xs;
+          }
+          
+          .studentNo {
+            font-size: $font-size-xs;
+            color: $color-text-tertiary;
+          }
+        }
+      }
+    }
+  }
+  
+  .modalFooter {
+    display: flex;
+    gap: $spacing-md;
+    padding: $spacing-lg;
+    border-top: 1rpx solid $color-divider;
+    
+    button {
+      flex: 1;
+    }
+  }
+}
+
+.reportOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.reportContent {
+  width: 90%;
+  max-height: 80vh;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.reportHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: $spacing-lg;
+  border-bottom: 1rpx solid $color-divider;
+  
+  .reportTitleWrap {
+    flex: 1;
+  }
+  
+  .reportTitle {
+    display: block;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-xs;
+  }
+  
+  .reportSubtitle {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+  
+  .reportClose {
+    font-size: 48rpx;
+    color: $color-text-tertiary;
+    line-height: 1;
+    padding: 0 $spacing-xs;
+  }
+}
+
+.reportBody {
+  flex: 1;
+  padding: $spacing-lg;
+  max-height: 50vh;
+}
+
+.reportSummary {
+  margin-bottom: $spacing-lg;
+}
+
+.totalScoreCard {
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  border-radius: $radius-lg;
+  padding: $spacing-xl;
+  text-align: center;
+  margin-bottom: $spacing-md;
+  
+  .totalScore {
+    display: block;
+    font-size: 72rpx;
+    font-weight: $font-weight-bold;
+    color: $color-text-white;
+    margin-bottom: $spacing-xs;
+  }
+  
+  .totalLabel {
+    font-size: $font-size-sm;
+    color: rgba(255, 255, 255, 0.8);
+  }
+}
+
+.studentInfoRow {
+  display: flex;
+  justify-content: space-between;
+  padding: $spacing-sm 0;
+  
+  .studentInfoLabel {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+  
+  .studentInfoValue {
+    font-size: $font-size-sm;
+    color: $color-text-primary;
+    font-weight: $font-weight-medium;
+  }
+}
+
+.reportSection {
+  margin-bottom: $spacing-lg;
+  
+  .reportSectionTitle {
+    display: block;
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-md;
+  }
+}
+
+.scoreItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-sm 0;
+  border-bottom: 1rpx solid $color-divider;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  .scoreName {
+    flex: 1;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+  
+  .scoreValue {
+    font-size: $font-size-md;
+    font-weight: $font-weight-medium;
+    color: $color-text-primary;
+    margin-right: $spacing-xs;
+  }
+  
+  .scoreUnit {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    margin-right: $spacing-sm;
+  }
+}
+
+.evaluation {
+  background: $color-bg-page;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  
+  .evaluationText {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    line-height: $line-height-loose;
+  }
+}
+
+.reportFooter {
+  padding: $spacing-lg;
+  border-top: 1rpx solid $color-divider;
+  
+  .downloadBtn {
+    display: block;
+    width: 100%;
+    height: $button-height-md;
+    line-height: $button-height-md;
+    text-align: center;
+    background: $color-primary;
+    color: $color-text-white;
+    border-radius: $radius-md;
+    font-size: $font-size-md;
+    font-weight: $font-weight-medium;
+  }
+}

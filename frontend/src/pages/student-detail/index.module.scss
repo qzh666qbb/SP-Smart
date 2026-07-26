@@ -1,0 +1,326 @@
+@use '@/styles/variables.scss' as *;
+
+.detailPage {
+  min-height: 100vh;
+  background: $color-bg-page;
+}
+
+.infoCard {
+  margin: $page-padding;
+  padding: $spacing-lg;
+  
+  .header {
+    display: flex;
+    align-items: center;
+    margin-bottom: $spacing-xl;
+  }
+  
+  .avatar {
+    width: 120rpx;
+    height: 120rpx;
+    border-radius: $radius-round;
+    background: $color-primary-light;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: $spacing-lg;
+    
+    .avatarText {
+      font-size: $font-size-xxl;
+      color: $color-primary;
+      font-weight: $font-weight-bold;
+    }
+  }
+  
+  .userInfo {
+    flex: 1;
+    
+    .userName {
+      display: block;
+      font-size: $font-size-xl;
+      font-weight: $font-weight-bold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-sm;
+    }
+    
+    .userMeta {
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+    }
+    
+    .age {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+    }
+  }
+  
+  .infoRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-md 0;
+    
+    &:not(:last-child) {
+      border-bottom: 1rpx solid $color-divider;
+    }
+    
+    .infoLabel {
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+    }
+    
+    .infoValue {
+      font-size: $font-size-sm;
+      color: $color-text-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.tabHeader {
+  display: flex;
+  background: $color-bg-card;
+  padding: 0 $page-padding;
+  border-bottom: 1rpx solid $color-divider;
+  
+  .tabItem {
+    flex: 1;
+    padding: $spacing-lg 0;
+    text-align: center;
+    position: relative;
+    
+    &.active {
+      .tabText {
+        color: $color-primary;
+        font-weight: $font-weight-semibold;
+      }
+      
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 48rpx;
+        height: 4rpx;
+        background: $color-primary;
+        border-radius: 2rpx;
+      }
+    }
+    
+    .tabText {
+      font-size: $font-size-md;
+      color: $color-text-secondary;
+    }
+  }
+}
+
+.content {
+  padding: $page-padding;
+}
+
+.recordCard {
+  margin-bottom: $spacing-md;
+  padding: $spacing-lg;
+  
+  .recordHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .recordInfo {
+    .recordNo {
+      display: block;
+      font-size: $font-size-md;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+    }
+    
+    .recordDate {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
+  
+  .recordScore {
+    text-align: right;
+    
+    .score {
+      display: block;
+      font-size: $font-size-xl;
+      font-weight: $font-weight-bold;
+      color: $color-primary;
+      margin-bottom: $spacing-xs;
+    }
+  }
+}
+
+.courseCard {
+  margin-bottom: $spacing-md;
+  padding: $spacing-lg;
+  
+  .courseHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-sm;
+  }
+  
+  .courseInfo {
+    .courseName {
+      display: block;
+      font-size: $font-size-md;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+    }
+    
+    .courseDate {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
+  
+  .courseFooter {
+    .courseNo {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
+}
+
+.emptyCard {
+  padding: $spacing-xl * 2;
+  text-align: center;
+  
+  .emptyText {
+    font-size: $font-size-md;
+    color: $color-text-tertiary;
+  }
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1000;
+}
+
+.modalContent {
+  width: 100%;
+  background: $color-bg-card;
+  border-radius: $radius-lg $radius-lg 0 0;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  
+  .modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-lg;
+    border-bottom: 1rpx solid $color-divider;
+    
+    .modalTitle {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+    }
+    
+    .modalClose {
+      font-size: $font-size-xxl;
+      color: $color-text-tertiary;
+      padding: $spacing-sm;
+    }
+  }
+  
+  .modalBody {
+    flex: 1;
+    padding: $spacing-lg;
+    overflow-y: auto;
+  }
+  
+  .reportInfo {
+    .reportRow {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: $spacing-md 0;
+      
+      &:not(:last-child) {
+        border-bottom: 1rpx solid $color-divider;
+      }
+      
+      .reportLabel {
+        font-size: $font-size-sm;
+        color: $color-text-tertiary;
+      }
+      
+      .reportValue {
+        font-size: $font-size-sm;
+        color: $color-text-primary;
+        font-weight: $font-weight-medium;
+      }
+    }
+    
+    .scoreSection {
+      margin-top: $spacing-xl;
+      
+      .sectionTitle {
+        display: block;
+        font-size: $font-size-md;
+        font-weight: $font-weight-semibold;
+        color: $color-text-primary;
+        margin-bottom: $spacing-md;
+      }
+      
+      .scoreItems {
+        .scoreItem {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: $spacing-md 0;
+          
+          &:not(:last-child) {
+            border-bottom: 1rpx solid $color-divider;
+          }
+          
+          .scoreName {
+            font-size: $font-size-sm;
+            color: $color-text-primary;
+          }
+          
+          .scoreValue {
+            font-size: $font-size-sm;
+            color: $color-text-secondary;
+          }
+          
+          .scoreLevel {
+            font-size: $font-size-xs;
+            color: $color-success;
+            background: $color-primary-light;
+            padding: 4rpx 12rpx;
+            border-radius: $radius-sm;
+          }
+        }
+      }
+    }
+  }
+  
+  .modalFooter {
+    padding: $spacing-lg;
+    border-top: 1rpx solid $color-divider;
+    
+    button {
+      width: 100%;
+    }
+  }
+}

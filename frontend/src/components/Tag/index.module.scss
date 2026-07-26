@@ -1,0 +1,40 @@
+@use '@/styles/variables.scss' as *;
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $radius-sm;
+  
+  .text {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+  }
+  
+  &.typePrimary {
+    background: $color-primary-light;
+    .text { color: $color-primary; }
+  }
+  
+  &.typeSuccess {
+    background: rgba($color-success, 0.1);
+    .text { color: $color-success; }
+  }
+  
+  &.typeWarning {
+    background: rgba($color-warning, 0.1);
+    .text { color: $color-warning; }
+  }
+  
+  &.typeDanger {
+    background: rgba($color-error, 0.1);
+    .text { color: $color-error; }
+  }
+  
+  &.typeInfo {
+    background: $color-bg-hover;
+    .text { color: $color-text-secondary; }
+  }
+}

@@ -1,0 +1,40 @@
+@use '@/styles/variables.scss' as *;
+
+.settingsPage {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $page-padding;
+}
+
+.formCard {
+  padding: $spacing-lg;
+  
+  .formTitle {
+    display: block;
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-xl;
+  }
+  
+  .formItem {
+    margin-bottom: $spacing-lg;
+    
+    .formLabel {
+      display: block;
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      margin-bottom: $spacing-sm;
+    }
+    
+    .formInput {
+      width: 100%;
+      height: $button-height-md;
+      padding: 0 $spacing-md;
+      border: 1rpx solid $color-border;
+      border-radius: $radius-md;
+      font-size: $font-size-md;
+      box-sizing: border-box;
+    }
+  }
+}

@@ -1,0 +1,42 @@
+package com.example.training.schedule.domain.repository;
+
+import com.example.training.schedule.domain.model.Lesson;
+import com.example.training.schedule.domain.model.LessonStudent;
+import com.example.training.schedule.domain.model.ScheduleSeries;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+public interface ScheduleRepository {
+    
+    ScheduleSeries saveScheduleSeries(ScheduleSeries series);
+    
+    Optional<ScheduleSeries> findScheduleSeriesById(Long id);
+    
+    List<ScheduleSeries> findByTeacherId(Long teacherId);
+    
+    List<ScheduleSeries> findByClassGroupId(Long classGroupId);
+    
+    Lesson saveLesson(Lesson lesson);
+    
+    Optional<Lesson> findLessonById(Long id);
+    
+    Optional<Lesson> findByLessonNo(String lessonNo);
+    
+    List<Lesson> findByTeacherIdAndDate(Long teacherId, LocalDate date);
+    
+    List<Lesson> findByClassGroupIdAndDateRange(Long classGroupId, LocalDate startDate, LocalDate endDate);
+    
+    List<Lesson> findByStudentIdAndDateRange(Long studentId, LocalDate startDate, LocalDate endDate);
+    
+    LessonStudent saveLessonStudent(LessonStudent lessonStudent);
+    
+    Optional<LessonStudent> findLessonStudent(Long lessonId, Long studentId);
+    
+    List<LessonStudent> findByLessonId(Long lessonId);
+    
+    List<LessonStudent> findByStudentId(Long studentId);
+    
+    void deleteScheduleSeries(Long id);
+}

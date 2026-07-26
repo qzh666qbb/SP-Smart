@@ -1,0 +1,38 @@
+@use '@/styles/variables.scss' as *;
+
+.physicalCard {
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-lg;
+  }
+  
+  .score {
+    font-size: $font-size-xxl;
+    font-weight: $font-weight-bold;
+    color: $color-primary;
+  }
+  
+  .info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-sm 0;
+    
+    &:not(:last-child) {
+      border-bottom: 1rpx solid $color-divider;
+    }
+    
+    .label {
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+    }
+    
+    .value {
+      font-size: $font-size-sm;
+      color: $color-text-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+}

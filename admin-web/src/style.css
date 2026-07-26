@@ -1,0 +1,158 @@
+@import './styles/variables.scss';
+
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-size: 14px;
+  
+  color-scheme: light;
+  color: #111827;
+  background-color: #f3f4f6;
+  
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 1200px;
+  min-height: 100vh;
+  background-color: #f3f4f6;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+:deep(.el-button--primary) {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-color: #2563eb;
+  border-radius: 6px;
+}
+
+:deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+  border-color: #3b82f6;
+}
+
+:deep(.el-button--danger) {
+  border-radius: 6px;
+}
+
+:deep(.el-button--warning) {
+  border-radius: 6px;
+}
+
+:deep(.el-button--default) {
+  border-radius: 6px;
+}
+
+:deep(.el-dialog__header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+:deep(.el-dialog__title) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+:deep(.el-dialog__body) {
+  padding: 24px;
+}
+
+:deep(.el-dialog__footer) {
+  padding: 16px 24px;
+  border-top: 1px solid #f3f4f6;
+}
+
+:deep(.el-input__wrapper) {
+  border-radius: 6px;
+}
+
+:deep(.el-select__wrapper) {
+  border-radius: 6px;
+}
+
+:deep(.el-date-picker__wrapper) {
+  border-radius: 6px;
+}
+
+:deep(.el-time-picker__wrapper) {
+  border-radius: 6px;
+}
+
+:deep(.el-tag) {
+  border-radius: 4px;
+}
+
+:deep(.el-pagination) {
+  margin-top: 0;
+}
+
+:deep(.el-pagination.is-background .el-pager li) {
+  border-radius: 6px;
+}
+
+:deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: #2563eb;
+}
+
+:deep(.el-table__cell .action-buttons) {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+:deep(.el-table__cell .el-button) {
+  display: inline-flex;
+  margin-right: 0;
+  flex-shrink: 0;
+}
+
+:deep(.el-table) {
+  width: 100% !important;
+}
+
+:deep(.el-table__header-wrapper) {
+  width: 100% !important;
+}
+
+:deep(.el-table__body-wrapper) {
+  width: 100% !important;
+}

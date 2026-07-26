@@ -1,0 +1,133 @@
+@use '@/styles/variables.scss' as *;
+
+.studentsPage {
+  min-height: 100vh;
+  background: $color-bg-page;
+}
+
+.container {
+  padding: $page-padding;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-lg;
+  
+  .pageTitle {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+  }
+  
+  .pageCount {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+}
+
+.studentCard {
+  margin-bottom: $spacing-md;
+  padding: $spacing-lg;
+  display: flex;
+  align-items: center;
+  
+  .studentHeader {
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+  
+  .studentAvatar {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: $radius-round;
+    background: $color-primary-light;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: $spacing-md;
+    
+    .avatarText {
+      font-size: $font-size-lg;
+      color: $color-primary;
+      font-weight: $font-weight-semibold;
+    }
+  }
+  
+  .studentInfo {
+    flex: 1;
+    
+    .studentNameRow {
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+      margin-bottom: $spacing-xs;
+    }
+    
+    .studentName {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+    }
+    
+    .studentNo {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+      margin-right: $spacing-sm;
+    }
+    
+    .studentAge {
+      font-size: $font-size-xs;
+      color: $color-text-secondary;
+    }
+  }
+  
+  .parentInfo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: $spacing-xs;
+    margin-top: $spacing-xs;
+    
+    .parentLabel {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+    
+    .parentName {
+      font-size: $font-size-xs;
+      color: $color-text-secondary;
+      margin-right: $spacing-sm;
+    }
+    
+    .parentPhone {
+      font-size: $font-size-xs;
+      color: $color-primary;
+    }
+  }
+  
+  .arrow {
+    font-size: $font-size-xl;
+    color: $color-text-disabled;
+    margin-left: $spacing-sm;
+  }
+}
+
+.emptyCard {
+  padding: $spacing-xl * 2;
+  text-align: center;
+  
+  .emptyText {
+    font-size: $font-size-md;
+    color: $color-text-tertiary;
+  }
+}
+
+.loading {
+  text-align: center;
+  padding: $spacing-xl;
+  color: $color-text-tertiary;
+  font-size: $font-size-md;
+}

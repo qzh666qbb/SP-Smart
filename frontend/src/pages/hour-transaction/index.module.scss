@@ -1,0 +1,276 @@
+@use '@/styles/variables.scss' as *;
+
+.transactionPage {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $page-padding;
+}
+
+.summaryCard {
+  margin-bottom: $spacing-lg;
+  padding: $spacing-lg;
+  
+  .summaryHeader {
+    text-align: center;
+    margin-bottom: $spacing-lg;
+    
+    .summaryLabel {
+      font-size: $font-size-md;
+      color: $color-text-secondary;
+    }
+  }
+  
+  .summaryStats {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    
+    .statItem {
+      flex: 1;
+      text-align: center;
+      
+      .statValue {
+        display: block;
+        font-size: $font-size-xl;
+        font-weight: $font-weight-bold;
+        color: $color-primary;
+        margin-bottom: $spacing-xs;
+      }
+      
+      .statLabel {
+        font-size: $font-size-xs;
+        color: $color-text-tertiary;
+      }
+    }
+    
+    .statDivider {
+      width: 1rpx;
+      height: 60rpx;
+      background: $color-divider;
+    }
+  }
+}
+
+.section {
+  .sectionTitle {
+    display: block;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-md;
+  }
+}
+
+.lessonCard {
+  margin-bottom: $spacing-md;
+  padding: $spacing-lg;
+  
+  .lessonHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-sm;
+  }
+  
+  .lessonInfo {
+    .lessonName {
+      display: block;
+      font-size: $font-size-md;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+    }
+    
+    .lessonDate {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
+  
+  .lessonFooter {
+    display: flex;
+    justify-content: space-between;
+    
+    .lessonNo {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+    
+    .lessonTeacher {
+      font-size: $font-size-xs;
+      color: $color-text-secondary;
+    }
+  }
+  
+  .lessonAttendance {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: $spacing-sm;
+    margin-top: $spacing-sm;
+    border-top: 1rpx solid $color-divider;
+    
+    .attendanceText {
+      font-size: $font-size-sm;
+      color: $color-primary;
+    }
+    
+    .arrow {
+      font-size: $font-size-lg;
+      color: $color-primary;
+      line-height: 1;
+    }
+  }
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  width: 90%;
+  max-height: 80vh;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: $spacing-lg;
+  border-bottom: 1rpx solid $color-divider;
+  
+  .modalTitleWrap {
+    flex: 1;
+  }
+  
+  .modalTitle {
+    display: block;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    margin-bottom: $spacing-xs;
+  }
+  
+  .modalSubtitle {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+  
+  .modalClose {
+    font-size: 48rpx;
+    color: $color-text-tertiary;
+    line-height: 1;
+    padding: 0 $spacing-xs;
+  }
+}
+
+.attendanceSummary {
+  display: flex;
+  justify-content: space-around;
+  padding: $spacing-md $spacing-lg;
+  border-bottom: 1rpx solid $color-divider;
+  background: $color-bg-page;
+  
+  .summaryItem {
+    text-align: center;
+    
+    .summaryNum {
+      display: block;
+      font-size: $font-size-lg;
+      font-weight: $font-weight-bold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+    }
+    
+    .summaryLabel {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
+}
+
+.modalBody {
+  flex: 1;
+  overflow: hidden;
+}
+
+.studentList {
+  height: 50vh;
+  padding: 0 $spacing-lg;
+  
+  .studentItem {
+    display: flex;
+    align-items: center;
+    padding: $spacing-md 0;
+    border-bottom: 1rpx solid $color-divider;
+    
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+  
+  .studentAvatar {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: 50%;
+    background: $color-primary-light;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: $spacing-md;
+    
+    .avatarText {
+      font-size: $font-size-md;
+      font-weight: $font-weight-semibold;
+      color: $color-primary;
+    }
+  }
+  
+  .studentInfo {
+    flex: 1;
+    
+    .studentName {
+      display: block;
+      font-size: $font-size-md;
+      font-weight: $font-weight-medium;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+    }
+    
+    .studentNo {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
+}
+
+.emptyCard {
+  padding: $spacing-xl * 2;
+  text-align: center;
+  
+  .emptyText {
+    font-size: $font-size-md;
+    color: $color-text-tertiary;
+  }
+}
+
+.loading {
+  text-align: center;
+  padding: $spacing-xl;
+  color: $color-text-tertiary;
+  font-size: $font-size-md;
+}

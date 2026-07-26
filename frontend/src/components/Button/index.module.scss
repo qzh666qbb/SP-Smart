@@ -1,0 +1,61 @@
+@use '@/styles/variables.scss' as *;
+
+.button {
+  @include button-reset;
+  
+  border-radius: $radius-button;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+  
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+  
+  &.sizeSm {
+    height: $button-height-sm;
+    font-size: $font-size-sm;
+    padding: 0 $spacing-md;
+  }
+  
+  &.sizeMd {
+    height: $button-height-md;
+    font-size: $font-size-md;
+    padding: 0 $spacing-xl;
+  }
+  
+  &.sizeLg {
+    height: $button-height-lg;
+    font-size: $font-size-lg;
+    padding: 0 $spacing-xl;
+  }
+  
+  &.typePrimary {
+    background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+    color: $color-text-white;
+    border: none;
+  }
+  
+  &.typeSecondary {
+    background: $color-bg-hover;
+    color: $color-text-primary;
+    border: none;
+  }
+  
+  &.typeWarning {
+    background: $color-warning;
+    color: $color-text-white;
+    border: none;
+  }
+  
+  &.typeDanger {
+    background: $color-error;
+    color: $color-text-white;
+    border: none;
+  }
+  
+  &.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
