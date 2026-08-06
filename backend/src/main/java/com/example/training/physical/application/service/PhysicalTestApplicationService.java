@@ -8,6 +8,9 @@ import com.example.training.physical.domain.model.PhysicalScoreDetail;
 import com.example.training.physical.domain.model.PhysicalTestItem;
 import com.example.training.physical.domain.model.PhysicalTestRecord;
 import com.example.training.physical.domain.repository.PhysicalTestRepository;
+import com.example.training.physical.domain.service.PhysicalScoringEngine;
+import com.example.training.student.domain.model.Student;
+import com.example.training.student.domain.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,6 +29,8 @@ import java.util.UUID;
 public class PhysicalTestApplicationService {
     
     private final PhysicalTestRepository physicalTestRepository;
+    private final PhysicalScoringEngine scoringEngine;
+    private final StudentRepository studentRepository;
     
     @Transactional
     public PhysicalTestRecord createTestRecord(PhysicalTestCreateRequest request, CurrentUser currentUser) {
@@ -42,31 +48,66 @@ public class PhysicalTestApplicationService {
         
         PhysicalTestRecord savedRecord = physicalTestRepository.saveRecord(record);
         
+        Student student = studentRepository.findById(request.getStudentId()).orElse(null);
+        String gender = student != null ? student.getGender() : null;
+        LocalDate birthDate = student != null ? student.getBirthDate() : null;
+        LocalDate testDate = request.getTestDate() != null ? request.getTestDate() : LocalDate.now();
+        
         BigDecimal totalScore = BigDecimal.ZERO;
+        List<PhysicalScoringEngine.ScoringResult> scoringResults = new ArrayList<>();
         
         for (PhysicalTestCreateRequest.ScoreDetail detail : request.getScores()) {
+            BigDecimal engineScore = null;
+            String engineLevel = null;
+            
+            if (student != null && gender != null && birthDate != null) {
+                PhysicalScoringEngine.ScoringResult result = scoringEngine.scoreItem(
+                        detail.getItemId(), detail.getRawValue(), gender, birthDate, testDate);
+                if (result.isValid()) {
+                    engineScore = result.getScoreValue();
+                    engineLevel = result.getLevel();
+                    scoringResults.add(result);
+                }
+            }
+            
+            BigDecimal convertedScore = (engineScore != null) ? engineScore : detail.getConvertedScore();
+            String level = (engineLevel != null) ? engineLevel : detail.getLevel();
+            
             PhysicalScoreDetail scoreDetail = PhysicalScoreDetail.builder()
                     .recordId(savedRecord.getId())
                     .itemId(detail.getItemId())
                     .rawValue(detail.getRawValue())
-                    .convertedScore(detail.getConvertedScore())
-                    .level(detail.getLevel())
+                    .convertedScore(convertedScore)
+                    .level(level)
                     .remark(detail.getRemark())
                     .build();
             
             physicalTestRepository.saveScoreDetail(scoreDetail);
             
-            if (detail.getConvertedScore() != null) {
-                totalScore = totalScore.add(detail.getConvertedScore());
+            if (convertedScore != null) {
+                totalScore = totalScore.add(convertedScore);
             }
         }
         
-        savedRecord.setTotalScore(totalScore.setScale(1, RoundingMode.HALF_UP));
-        savedRecord.setOverallLevel(calculateOverallLevel(totalScore));
+        BigDecimal engineTotal = scoringEngine.calculateOverallScore(scoringResults);
+        int itemCount = scoringResults.size();
+        BigDecimal finalTotal;
+        String finalLevel;
+        
+        if (itemCount > 0 && engineTotal.compareTo(BigDecimal.ZERO) > 0) {
+            finalTotal = engineTotal;
+            finalLevel = scoringEngine.calculateOverallLevel(engineTotal, itemCount);
+        } else {
+            finalTotal = totalScore.setScale(1, RoundingMode.HALF_UP);
+            finalLevel = calculateOverallLevel(totalScore);
+        }
+        
+        savedRecord.setTotalScore(finalTotal);
+        savedRecord.setOverallLevel(finalLevel);
         savedRecord.setStatus("SUBMITTED");
         
         physicalTestRepository.saveRecord(savedRecord);
-        log.info("创建体测记录: recordNo={}, studentId={}, totalScore={}", recordNo, request.getStudentId(), totalScore);
+        log.info("创建体测记录: recordNo={}, studentId={}, totalScore={}", recordNo, request.getStudentId(), finalTotal);
         
         return savedRecord;
     }
@@ -127,26 +168,62 @@ public class PhysicalTestApplicationService {
         
         physicalTestRepository.deleteScoreDetails(recordId);
         
+        Student student = studentRepository.findById(request.getStudentId()).orElse(null);
+        String gender = student != null ? student.getGender() : null;
+        LocalDate birthDate = student != null ? student.getBirthDate() : null;
+        LocalDate testDate = request.getTestDate() != null ? request.getTestDate() : LocalDate.now();
+        
         BigDecimal totalScore = BigDecimal.ZERO;
+        List<PhysicalScoringEngine.ScoringResult> scoringResults = new ArrayList<>();
+        
         for (PhysicalTestCreateRequest.ScoreDetail detail : request.getScores()) {
+            BigDecimal engineScore = null;
+            String engineLevel = null;
+            
+            if (student != null && gender != null && birthDate != null) {
+                PhysicalScoringEngine.ScoringResult result = scoringEngine.scoreItem(
+                        detail.getItemId(), detail.getRawValue(), gender, birthDate, testDate);
+                if (result.isValid()) {
+                    engineScore = result.getScoreValue();
+                    engineLevel = result.getLevel();
+                    scoringResults.add(result);
+                }
+            }
+            
+            BigDecimal convertedScore = (engineScore != null) ? engineScore : detail.getConvertedScore();
+            String level = (engineLevel != null) ? engineLevel : detail.getLevel();
+            
             PhysicalScoreDetail scoreDetail = PhysicalScoreDetail.builder()
                     .recordId(recordId)
                     .itemId(detail.getItemId())
                     .rawValue(detail.getRawValue())
-                    .convertedScore(detail.getConvertedScore())
-                    .level(detail.getLevel())
+                    .convertedScore(convertedScore)
+                    .level(level)
                     .remark(detail.getRemark())
                     .build();
             
             physicalTestRepository.saveScoreDetail(scoreDetail);
             
-            if (detail.getConvertedScore() != null) {
-                totalScore = totalScore.add(detail.getConvertedScore());
+            if (convertedScore != null) {
+                totalScore = totalScore.add(convertedScore);
             }
         }
         
-        record.setTotalScore(totalScore.setScale(1, RoundingMode.HALF_UP));
-        record.setOverallLevel(calculateOverallLevel(totalScore));
+        BigDecimal engineTotal = scoringEngine.calculateOverallScore(scoringResults);
+        int itemCount = scoringResults.size();
+        BigDecimal finalTotal;
+        String finalLevel;
+        
+        if (itemCount > 0 && engineTotal.compareTo(BigDecimal.ZERO) > 0) {
+            finalTotal = engineTotal;
+            finalLevel = scoringEngine.calculateOverallLevel(engineTotal, itemCount);
+        } else {
+            finalTotal = totalScore.setScale(1, RoundingMode.HALF_UP);
+            finalLevel = calculateOverallLevel(totalScore);
+        }
+        
+        record.setTotalScore(finalTotal);
+        record.setOverallLevel(finalLevel);
         
         return physicalTestRepository.saveRecord(record);
     }

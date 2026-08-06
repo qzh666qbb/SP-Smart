@@ -29,6 +29,8 @@ public class LessonStudentEntity {
     private String attendanceRemark;
     private Long confirmedBy;
     private LocalDateTime confirmedAt;
+    private Integer rating;
+    private String ratingComment;
     
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

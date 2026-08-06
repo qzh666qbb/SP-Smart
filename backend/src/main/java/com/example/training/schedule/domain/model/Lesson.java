@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ public class Lesson {
     private LocalDateTime completedAt;
     private Long completedBy;
     private String sourceType;
+    private BigDecimal consumeHours;
     private Integer version;
     private Long createdBy;
     private LocalDateTime createdAt;

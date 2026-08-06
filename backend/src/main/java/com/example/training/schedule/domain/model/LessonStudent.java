@@ -25,6 +25,8 @@ public class LessonStudent {
     private String attendanceRemark;
     private Long confirmedBy;
     private LocalDateTime confirmedAt;
+    private Integer rating;
+    private String ratingComment;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     

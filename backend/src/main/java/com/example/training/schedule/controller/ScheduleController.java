@@ -1,10 +1,14 @@
 package com.example.training.schedule.controller;
 
+import com.example.training.common.exception.BusinessException;
+import com.example.training.common.exception.ErrorCode;
 import com.example.training.common.response.ApiResponse;
 import com.example.training.common.security.CurrentUser;
+import com.example.training.common.security.ParentPermissionService;
 import com.example.training.schedule.application.dto.AttendanceRequest;
 import com.example.training.schedule.application.dto.ScheduleCreateRequest;
 import com.example.training.schedule.application.service.ScheduleApplicationService;
+import com.example.training.schedule.application.service.ScheduleCompletionService;
 import com.example.training.schedule.domain.model.Lesson;
 import com.example.training.schedule.domain.model.LessonStudent;
 import com.example.training.schedule.domain.model.ScheduleSeries;
@@ -15,15 +19,19 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class ScheduleController {
-    
+
     private final ScheduleApplicationService scheduleApplicationService;
+    private final ScheduleCompletionService scheduleCompletionService;
+    private final ParentPermissionService parentPermissionService;
     
     @PostMapping("/business/schedules")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
@@ -64,22 +72,18 @@ public class ScheduleController {
         return ApiResponse.success();
     }
     
-    @PostMapping("/business/lessons/{lessonId}/complete")
+    @PostMapping("/business/lessons/{id}/complete")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<Void> completeLesson(
-            @PathVariable Long lessonId,
-            @AuthenticationPrincipal CurrentUser currentUser) {
-        scheduleApplicationService.completeLesson(lessonId, currentUser);
+    public ApiResponse<Void> completeLessonWithConsume(@PathVariable Long id, @AuthenticationPrincipal CurrentUser currentUser) {
+        scheduleCompletionService.completeLessonWithAutoConsume(id, currentUser);
         return ApiResponse.success();
     }
     
-    @PostMapping("/business/lessons/{lessonId}/cancel")
+    @PostMapping("/business/lessons/{id}/cancel")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<Void> cancelLesson(
-            @PathVariable Long lessonId,
-            @RequestParam String reason,
-            @AuthenticationPrincipal CurrentUser currentUser) {
-        scheduleApplicationService.cancelLesson(lessonId, reason, currentUser);
+    public ApiResponse<Void> cancelLessonWithRefund(@PathVariable Long id, @RequestBody(required=false) Map<String, String> body, @AuthenticationPrincipal CurrentUser currentUser) {
+        String reason = body != null ? body.getOrDefault("reason", "手动取消") : "手动取消";
+        scheduleCompletionService.cancelLessonWithRefund(id, reason, currentUser);
         return ApiResponse.success();
     }
     
@@ -88,6 +92,19 @@ public class ScheduleController {
     public ApiResponse<Void> recordAttendance(
             @Valid @RequestBody AttendanceRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
+        scheduleApplicationService.recordAttendance(request, currentUser);
+        return ApiResponse.success();
+    }
+    
+    @PostMapping("/parent/lessons/{lessonId}/attendance")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    public ApiResponse<Void> parentRecordAttendance(
+            @PathVariable Long lessonId,
+            @RequestBody AttendanceRequest request,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if (!parentPermissionService.canAccessStudent(currentUser, request.getStudentId())) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "非本人子女，无权限操作");
+        }
         scheduleApplicationService.recordAttendance(request, currentUser);
         return ApiResponse.success();
     }
@@ -117,5 +134,24 @@ public class ScheduleController {
             @AuthenticationPrincipal CurrentUser currentUser) {
         List<Lesson> response = scheduleApplicationService.getChildSchedules(studentId, startDate, endDate, currentUser);
         return ApiResponse.success(response);
+    }
+
+    @PostMapping("/parent/lessons/{lessonId}/rating")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    public ApiResponse<Void> submitLessonRating(
+            @PathVariable Long lessonId,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        Long studentId = Long.valueOf(body.get("studentId").toString());
+        if (!parentPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED);
+        }
+        BigDecimal rating = new BigDecimal(body.getOrDefault("rating", "0").toString());
+        if (rating.compareTo(BigDecimal.ONE) < 0 || rating.compareTo(BigDecimal.valueOf(5)) > 0) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "评分需1-5分");
+        }
+        String comment = body.get("comment") != null ? body.get("comment").toString() : null;
+        scheduleApplicationService.submitRating(lessonId, studentId, rating, comment);
+        return ApiResponse.success();
     }
 }

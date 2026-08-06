@@ -61,10 +61,37 @@ public class CourseApplicationService {
     public void disableCourse(Long id) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
-        
+
         course.setStatus("DISABLED");
         courseRepository.save(course);
         log.info("禁用课程: id={}, code={}", id, course.getCourseCode());
+    }
+
+    @Transactional
+    public CourseResponse updateCourse(Long id, CourseCreateRequest request, CurrentUser currentUser) {
+        Course course = courseRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
+
+        if (request.getCourseName() != null) {
+            course.setCourseName(request.getCourseName());
+        }
+        if (request.getCourseType() != null) {
+            course.setCourseType(request.getCourseType());
+        }
+        if (request.getDescription() != null) {
+            course.setDescription(request.getDescription());
+        }
+        if (request.getDefaultDurationMinutes() != null) {
+            course.setDefaultDurationMinutes(request.getDefaultDurationMinutes());
+        }
+        if (request.getDefaultConsumeHours() != null) {
+            course.setDefaultConsumeHours(request.getDefaultConsumeHours());
+        }
+        course.setUpdatedBy(currentUser.getUserId());
+
+        Course savedCourse = courseRepository.save(course);
+        log.info("更新课程: id={}, code={}", id, savedCourse.getCourseCode());
+        return convertToResponse(savedCourse);
     }
     
     @Transactional

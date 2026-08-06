@@ -79,6 +79,7 @@ public class ScheduleApplicationService {
                             .endTime(series.getEndTime())
                             .status("PENDING")
                             .sourceType("SERIES")
+                            .consumeHours(series.getConsumeHours())
                             .createdBy(series.getCreatedBy())
                             .build();
                     
@@ -212,5 +213,20 @@ public class ScheduleApplicationService {
     
     public List<Lesson> getChildSchedules(Long studentId, LocalDate startDate, LocalDate endDate, CurrentUser currentUser) {
         return scheduleRepository.findByStudentIdAndDateRange(studentId, startDate, endDate);
+    }
+
+    @Transactional
+    public void submitRating(Long lessonId, Long studentId, java.math.BigDecimal rating, String comment) {
+        LessonStudent lessonStudent = scheduleRepository.findLessonStudent(lessonId, studentId)
+                .orElseGet(() -> LessonStudent.builder()
+                        .lessonId(lessonId)
+                        .studentId(studentId)
+                        .build());
+
+        lessonStudent.setRating(rating.intValue());
+        lessonStudent.setRatingComment(comment);
+
+        scheduleRepository.saveLessonStudent(lessonStudent);
+        log.info("提交课程评分: lessonId={}, studentId={}, rating={}", lessonId, studentId, rating);
     }
 }

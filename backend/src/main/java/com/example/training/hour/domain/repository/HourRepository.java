@@ -19,7 +19,9 @@ public interface HourRepository {
     Optional<HourTransaction> findTransactionByNo(String transactionNo);
     
     Optional<HourTransaction> findTransactionByKey(String idempotencyKey);
-    
+
+    Optional<HourTransaction> findTransactionById(Long id);
+
     List<HourTransaction> findTransactionsByStudentId(Long studentId);
     
     List<HourTransaction> findTransactionsByType(String transactionType);

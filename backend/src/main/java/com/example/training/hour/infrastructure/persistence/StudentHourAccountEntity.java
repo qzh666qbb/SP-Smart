@@ -24,6 +24,19 @@ public class StudentHourAccountEntity {
     private BigDecimal totalConsumed;
     private BigDecimal totalRefunded;
     private BigDecimal remainingHours;
+    
+    @TableField("paid_hours")
+    private BigDecimal paidHours;
+    
+    @TableField("gift_hours")
+    private BigDecimal giftHours;
+    
+    @TableField("experience_hours")
+    private BigDecimal experienceHours;
+    
+    @TableField("activity_hours")
+    private BigDecimal activityHours;
+    
     private Integer version;
     
     @TableField(fill = FieldFill.INSERT)

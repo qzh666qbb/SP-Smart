@@ -33,6 +33,15 @@ public class HourTransactionEntity {
     private String operatorRole;
     private String idempotencyKey;
     
+    @TableField("hour_source")
+    private String hourSource;
+    
+    @TableField("package_record_id")
+    private Long packageRecordId;
+    
+    @TableField("expire_date")
+    private LocalDateTime expireDate;
+    
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

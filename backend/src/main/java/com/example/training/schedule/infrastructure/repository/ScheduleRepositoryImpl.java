@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -221,6 +222,7 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .completedAt(lesson.getCompletedAt())
                 .completedBy(lesson.getCompletedBy())
                 .sourceType(lesson.getSourceType())
+                .consumeHours(lesson.getConsumeHours())
                 .version(lesson.getVersion())
                 .createdBy(lesson.getCreatedBy())
                 .createdAt(lesson.getCreatedAt())
@@ -229,7 +231,7 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .deletedAt(lesson.getDeletedAt())
                 .build();
     }
-    
+
     private Lesson convertToDomain(LessonEntity entity) {
         return Lesson.builder()
                 .id(entity.getId())
@@ -247,6 +249,7 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .completedAt(entity.getCompletedAt())
                 .completedBy(entity.getCompletedBy())
                 .sourceType(entity.getSourceType())
+                .consumeHours(entity.getConsumeHours())
                 .version(entity.getVersion())
                 .createdBy(entity.getCreatedBy())
                 .createdAt(entity.getCreatedAt())
@@ -269,11 +272,13 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .attendanceRemark(lessonStudent.getAttendanceRemark())
                 .confirmedBy(lessonStudent.getConfirmedBy())
                 .confirmedAt(lessonStudent.getConfirmedAt())
+                .rating(lessonStudent.getRating())
+                .ratingComment(lessonStudent.getRatingComment())
                 .createdAt(lessonStudent.getCreatedAt())
                 .updatedAt(lessonStudent.getUpdatedAt())
                 .build();
     }
-    
+
     private LessonStudent convertToDomain(LessonStudentEntity entity) {
         return LessonStudent.builder()
                 .id(entity.getId())
@@ -287,6 +292,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .attendanceRemark(entity.getAttendanceRemark())
                 .confirmedBy(entity.getConfirmedBy())
                 .confirmedAt(entity.getConfirmedAt())
+                .rating(entity.getRating())
+                .ratingComment(entity.getRatingComment())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -299,5 +306,15 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 new LambdaQueryWrapper<LessonEntity>()
                         .eq(LessonEntity::getScheduleSeriesId, id)
         );
+    }
+
+    @Override
+    public int markAbsentForCompletedLessons(LocalDateTime threshold) {
+        return lessonStudentMapper.markAbsentForCompletedLessons(threshold);
+    }
+
+    @Override
+    public List<LessonStudent> findLessonStudentsByLessonId(Long lessonId) {
+        return findByLessonId(lessonId);
     }
 }

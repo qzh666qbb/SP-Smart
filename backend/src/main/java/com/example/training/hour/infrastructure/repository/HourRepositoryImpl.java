@@ -75,7 +75,13 @@ public class HourRepositoryImpl implements HourRepository {
         );
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
-    
+
+    @Override
+    public Optional<HourTransaction> findTransactionById(Long id) {
+        HourTransactionEntity entity = transactionMapper.selectById(id);
+        return Optional.ofNullable(entity).map(this::convertToDomain);
+    }
+
     @Override
     public List<HourTransaction> findTransactionsByStudentId(Long studentId) {
         List<HourTransactionEntity> entities = transactionMapper.selectList(
@@ -104,6 +110,10 @@ public class HourRepositoryImpl implements HourRepository {
                 .totalConsumed(account.getTotalConsumed())
                 .totalRefunded(account.getTotalRefunded())
                 .remainingHours(account.getRemainingHours())
+                .paidHours(account.getPaidHours())
+                .giftHours(account.getGiftHours())
+                .experienceHours(account.getExperienceHours())
+                .activityHours(account.getActivityHours())
                 .version(account.getVersion())
                 .createdAt(account.getCreatedAt())
                 .updatedAt(account.getUpdatedAt())
@@ -118,6 +128,10 @@ public class HourRepositoryImpl implements HourRepository {
                 .totalConsumed(entity.getTotalConsumed())
                 .totalRefunded(entity.getTotalRefunded())
                 .remainingHours(entity.getRemainingHours())
+                .paidHours(entity.getPaidHours())
+                .giftHours(entity.getGiftHours())
+                .experienceHours(entity.getExperienceHours())
+                .activityHours(entity.getActivityHours())
                 .version(entity.getVersion())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
@@ -140,6 +154,9 @@ public class HourRepositoryImpl implements HourRepository {
                 .operatorId(transaction.getOperatorId())
                 .operatorRole(transaction.getOperatorRole())
                 .idempotencyKey(transaction.getIdempotencyKey())
+                .hourSource(transaction.getHourSource())
+                .packageRecordId(transaction.getPackageRecordId())
+                .expireDate(transaction.getExpireDate())
                 .createdAt(transaction.getCreatedAt())
                 .build();
     }
@@ -160,6 +177,9 @@ public class HourRepositoryImpl implements HourRepository {
                 .operatorId(entity.getOperatorId())
                 .operatorRole(entity.getOperatorRole())
                 .idempotencyKey(entity.getIdempotencyKey())
+                .hourSource(entity.getHourSource())
+                .packageRecordId(entity.getPackageRecordId())
+                .expireDate(entity.getExpireDate())
                 .createdAt(entity.getCreatedAt())
                 .build();
     }

@@ -5,6 +5,7 @@ import com.example.training.schedule.domain.model.LessonStudent;
 import com.example.training.schedule.domain.model.ScheduleSeries;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,4 +40,8 @@ public interface ScheduleRepository {
     List<LessonStudent> findByStudentId(Long studentId);
     
     void deleteScheduleSeries(Long id);
+
+    int markAbsentForCompletedLessons(LocalDateTime threshold);
+
+    List<LessonStudent> findLessonStudentsByLessonId(Long lessonId);
 }

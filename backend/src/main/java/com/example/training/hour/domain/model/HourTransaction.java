@@ -28,5 +28,8 @@ public class HourTransaction {
     private Long operatorId;
     private String operatorRole;
     private String idempotencyKey;
+    private String hourSource;
+    private Long packageRecordId;
+    private LocalDateTime expireDate;
     private LocalDateTime createdAt;
 }

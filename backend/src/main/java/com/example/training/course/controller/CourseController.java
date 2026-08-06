@@ -23,7 +23,7 @@ public class CourseController {
     private final CourseApplicationService courseApplicationService;
     
     @PostMapping("/business/courses")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CourseResponse> createCourse(
             @Valid @RequestBody CourseCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -46,24 +46,24 @@ public class CourseController {
     }
     
     @PutMapping("/business/courses/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CourseResponse> updateCourse(
             @PathVariable Long id,
             @Valid @RequestBody CourseCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
-        CourseResponse response = courseApplicationService.getCourseById(id);
+        CourseResponse response = courseApplicationService.updateCourse(id, request, currentUser);
         return ApiResponse.success(response);
     }
     
     @PostMapping("/business/courses/{id}/disable")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> disableCourse(@PathVariable Long id) {
         courseApplicationService.disableCourse(id);
         return ApiResponse.success();
     }
     
     @PostMapping("/business/class-groups")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ClassGroup> createClassGroup(
             @Valid @RequestBody ClassGroupCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -86,7 +86,7 @@ public class CourseController {
     }
     
     @PutMapping("/business/class-groups/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ClassGroup> updateClassGroup(
             @PathVariable Long id,
             @Valid @RequestBody ClassGroupCreateRequest request,
@@ -96,7 +96,7 @@ public class CourseController {
     }
     
     @PostMapping("/business/class-groups/{id}/add-students")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> addStudentsToClassGroup(
             @PathVariable Long id,
             @RequestBody List<Long> studentIds) {
@@ -105,7 +105,7 @@ public class CourseController {
     }
     
     @PostMapping("/business/class-groups/{id}/remove-students")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> removeStudentsFromClassGroup(
             @PathVariable Long id,
             @RequestBody List<Long> studentIds) {

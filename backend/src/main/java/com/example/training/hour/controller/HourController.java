@@ -23,7 +23,7 @@ public class HourController {
     private final HourApplicationService hourApplicationService;
     
     @PostMapping("/business/hours/recharge")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<StudentHourAccount> recharge(
             @Valid @RequestBody HourRechargeRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -32,11 +32,20 @@ public class HourController {
     }
     
     @PostMapping("/business/hours/refund")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<StudentHourAccount> refund(
             @Valid @RequestBody HourRefundRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
         StudentHourAccount response = hourApplicationService.refund(request, currentUser);
+        return ApiResponse.success(response);
+    }
+    
+    @PostMapping("/business/hours/adjust")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<StudentHourAccount> adjust(
+            @Valid @RequestBody HourRechargeRequest request,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        StudentHourAccount response = hourApplicationService.recharge(request, currentUser);
         return ApiResponse.success(response);
     }
     

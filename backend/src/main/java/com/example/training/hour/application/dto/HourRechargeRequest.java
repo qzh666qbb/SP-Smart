@@ -23,4 +23,6 @@ public class HourRechargeRequest {
     private BigDecimal amount;
     
     private String reason;
+    
+    private String hourSource;
 }

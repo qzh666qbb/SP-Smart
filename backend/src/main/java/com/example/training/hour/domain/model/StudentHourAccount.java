@@ -20,6 +20,10 @@ public class StudentHourAccount {
     private BigDecimal totalConsumed;
     private BigDecimal totalRefunded;
     private BigDecimal remainingHours;
+    private BigDecimal paidHours;
+    private BigDecimal giftHours;
+    private BigDecimal experienceHours;
+    private BigDecimal activityHours;
     private Integer version;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
