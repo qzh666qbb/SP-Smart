@@ -5,7 +5,7 @@
         <h2>学员管理</h2>
         <p class="page-desc">管理学员信息，包括基本资料和家长联系方式</p>
       </div>
-      <el-button type="primary" class="btn-primary" @click="showAddModal = true">
+      <el-button type="primary" class="btn-primary" @click="handleAdd">
         <el-icon><el-icon-plus /></el-icon>
         新增学员
       </el-button>
@@ -22,11 +22,17 @@
         <el-table-column prop="id" label="ID" width="50" />
         <el-table-column prop="name" label="姓名" min-width="80" />
         <el-table-column prop="studentNo" label="学号" width="100" />
-        <el-table-column prop="age" label="年龄" width="60" />
+        <el-table-column prop="birthDate" label="出生日期" width="110" />
+        <el-table-column label="年龄" width="60">
+          <template #default="{ row }">
+            <span v-if="row.birthDate">{{ calcAge(row.birthDate) }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="gender" label="性别" width="60">
           <template #default="{ row }">
-            <el-tag :type="row.gender === 'MALE' ? 'primary' : 'success'" class="role-tag">
-              {{ row.gender === 'MALE' ? '男' : '女' }}
+            <el-tag :type="row.gender === 'MALE' ? 'primary' : (row.gender === 'FEMALE' ? 'success' : 'info')" class="role-tag">
+              {{ row.gender === 'MALE' ? '男' : (row.gender === 'FEMALE' ? '女' : '未知') }}
             </el-tag>
           </template>
         </el-table-column>
@@ -37,7 +43,7 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button type="primary" size="small" class="btn-edit" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger" size="small" class="btn-delete" @click="handleDelete(row)">删除</el-button>
+              <el-button type="danger" size="small" class="btn-delete" @click.stop="handleDelete(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -57,28 +63,46 @@
       </div>
     </div>
 
-    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑学员' : '新增学员'" width="420px" class="custom-dialog">
-      <el-form :model="form" :rules="rules" ref="formRef" class="modal-form">
+    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑学员' : '新增学员'" width="460px" class="custom-dialog">
+      <el-form :model="form" :rules="rules" ref="formRef" class="modal-form" label-width="100px">
         <el-form-item prop="name" label="姓名">
-          <el-input v-model="form.name" placeholder="请输入姓名" />
+          <el-input v-model="form.name" placeholder="请输入学员姓名" />
         </el-form-item>
         <el-form-item prop="studentNo" label="学号">
-          <el-input v-model="form.studentNo" placeholder="请输入学号" />
-        </el-form-item>
-        <el-form-item prop="age" label="年龄">
-          <el-input-number v-model="form.age" :min="1" :max="100" placeholder="年龄" />
+          <el-input v-model="form.studentNo" placeholder="请输入学员编号" />
         </el-form-item>
         <el-form-item prop="gender" label="性别">
-          <el-select v-model="form.gender" placeholder="请选择性别">
+          <el-select v-model="form.gender" placeholder="请选择性别" style="width: 100%">
             <el-option label="男" value="MALE" />
             <el-option label="女" value="FEMALE" />
+            <el-option label="未知" value="UNKNOWN" />
           </el-select>
+        </el-form-item>
+        <el-form-item prop="birthDate" label="出生日期">
+          <el-date-picker v-model="form.birthDate" type="date" placeholder="请选择出生日期" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item prop="phone" label="学员联系电话">
+          <el-input v-model="form.phone" placeholder="学员本人电话（可为空）" maxlength="11" />
         </el-form-item>
         <el-form-item prop="parentName" label="家长姓名">
           <el-input v-model="form.parentName" placeholder="请输入家长姓名" />
         </el-form-item>
         <el-form-item prop="parentPhone" label="家长电话">
-          <el-input v-model="form.parentPhone" placeholder="请输入家长电话" />
+          <el-input v-model="form.parentPhone" placeholder="11位家长联系电话" maxlength="11" />
+        </el-form-item>
+        <el-form-item prop="parentRelation" label="家长关系">
+          <el-select v-model="form.parentRelation" placeholder="请选择家长关系" style="width: 100%" clearable>
+            <el-option label="父亲" value="FATHER" />
+            <el-option label="母亲" value="MOTHER" />
+            <el-option label="监护人" value="GUARDIAN" />
+            <el-option label="其他" value="OTHER" />
+          </el-select>
+        </el-form-item>
+        <el-form-item prop="enrollmentDate" label="报名日期">
+          <el-date-picker v-model="form.enrollmentDate" type="date" placeholder="请选择报名日期" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item prop="remark" label="备注">
+          <el-input v-model="form.remark" type="textarea" placeholder="备注信息" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -91,6 +115,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getStudents, createStudent, updateStudent, deleteStudent } from '@/api'
 
 const tableData = ref([])
@@ -104,69 +129,98 @@ const form = reactive({
   id: '',
   name: '',
   studentNo: '',
-  age: 12,
   gender: 'MALE',
+  birthDate: '',
+  phone: '',
   parentName: '',
-  parentPhone: ''
+  parentPhone: '',
+  parentRelation: 'MOTHER',
+  primaryTeacherId: null,
+  enrollmentDate: '',
+  medicalNotes: '',
+  remark: ''
 })
 
 const rules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   studentNo: [{ required: true, message: '请输入学号', trigger: 'blur' }],
-  age: [{ required: true, message: '请输入年龄', trigger: 'blur' }],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }]
 }
 
-const tableRowClassName = ({ rowIndex }) => {
-  if (rowIndex % 2 === 1) {
-    return 'row-stripe'
-  }
-  return ''
+const tableRowClassName = ({ rowIndex }) => (rowIndex % 2 === 1 ? 'row-stripe' : '')
+
+const calcAge = (birth) => {
+  if (!birth) return ''
+  const d = typeof birth === 'string' ? birth : String(birth)
+  const [y, m, day] = d.split('-').map(Number)
+  if (!y) return ''
+  const now = new Date()
+  let age = now.getFullYear() - y
+  const curM = now.getMonth() + 1
+  if (curM < m || (curM === m && now.getDate() < day)) age -= 1
+  return Math.max(0, age)
 }
 
 const fetchData = async () => {
   try {
     const res = await getStudents({ ...searchForm, ...pagination })
-    tableData.value = res.list || res
-    pagination.total = res.total || tableData.value.length
+    tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    tableData.value = []
+    pagination.total = 0
   }
 }
 
-const handleSearch = () => {
-  pagination.page = 1
-  fetchData()
+const handleSearch = () => { pagination.page = 1; fetchData() }
+const resetSearch = () => { searchForm.keyword = ''; pagination.page = 1; fetchData() }
+const handleSizeChange = (size) => { pagination.size = size; fetchData() }
+const handleCurrentChange = (page) => { pagination.page = page; fetchData() }
+
+const resetForm = () => {
+  form.id = ''
+  form.name = ''
+  form.studentNo = ''
+  form.gender = 'MALE'
+  form.birthDate = ''
+  form.phone = ''
+  form.parentName = ''
+  form.parentPhone = ''
+  form.parentRelation = 'MOTHER'
+  form.primaryTeacherId = null
+  form.enrollmentDate = ''
+  form.medicalNotes = ''
+  form.remark = ''
 }
 
-const resetSearch = () => {
-  searchForm.keyword = ''
-  pagination.page = 1
-  fetchData()
-}
-
-const handleSizeChange = (size) => {
-  pagination.size = size
-  fetchData()
-}
-
-const handleCurrentChange = (page) => {
-  pagination.page = page
-  fetchData()
+const handleAdd = () => {
+  isEdit.value = false
+  resetForm()
+  showAddModal.value = true
 }
 
 const handleEdit = (row) => {
   isEdit.value = true
-  Object.assign(form, row)
+  resetForm()
+  Object.assign(form, row || {})
   showAddModal.value = true
 }
 
-const handleDelete = (row) => {
-  if (!confirm(`确定删除学员 ${row.name} ?`)) return
-  deleteStudent(row.id).then(() => {
-    alert('删除成功')
+const handleDelete = async (row) => {
+  const target = row?.name ? `学员 ${row.name}` : '该学员'
+  try {
+    await ElMessageBox.confirm(`确定删除${target}？删除后学员档案、课时账户及关联排课记录均会解除绑定。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', distinguishCancelAndClose: true
+    })
+  } catch (_) { return }
+  try {
+    await deleteStudent(row.id)
+    ElMessage.success('删除成功')
     fetchData()
-  }).catch(() => alert('删除失败'))
+  } catch (err) {
+    ElMessage.error(err?.message || '删除失败')
+  }
 }
 
 const handleSubmit = async () => {
@@ -174,17 +228,31 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     try {
+      const payload = {
+        name: form.name,
+        studentNo: form.studentNo,
+        gender: form.gender || 'UNKNOWN',
+        birthDate: form.birthDate || null,
+        phone: form.phone || null,
+        parentName: form.parentName || null,
+        parentPhone: form.parentPhone || null,
+        parentRelation: form.parentRelation || null,
+        primaryTeacherId: form.primaryTeacherId ? Number(form.primaryTeacherId) : null,
+        enrollmentDate: form.enrollmentDate || null,
+        medicalNotes: form.medicalNotes || null,
+        remark: form.remark || null
+      }
       if (isEdit.value) {
-        await updateStudent(form.id, form)
-        alert('更新成功')
+        await updateStudent(form.id, payload)
+        ElMessage.success('更新成功')
       } else {
-        await createStudent(form)
-        alert('创建成功')
+        await createStudent(payload)
+        ElMessage.success('创建成功')
       }
       showAddModal.value = false
       fetchData()
     } catch (err) {
-      alert('操作失败')
+      ElMessage.error(err?.message || '操作失败')
     }
   })
 }

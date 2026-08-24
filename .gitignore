@@ -72,6 +72,14 @@ logs/
 *.sqlite
 *.sqlite3
 
+# Local DB server datadirs (MariaDB / MySQL binary-log + InnoDB files)
+# Do NOT commit any of these; keep schema migrations in backend/src/main/resources/db/migration
+.mariadb-data/
+.mysql-data/
+.mysql-new*/
+.mysql-new/
+.mysql-new2/
+
 # Pai
 .pai/
 .auth/
@@ -79,3 +87,6 @@ logs/
 # Taro
 .taro-cache/
 .taro/
+
+# Runtime data
+dump.rdb

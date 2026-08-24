@@ -6,10 +6,10 @@ spring:
     name: training-management
   
   datasource:
-    url: jdbc:mysql://localhost:3306/training_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8mb4
+    url: jdbc:mariadb://localhost:3306/training_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci
     username: root
     password: password
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.mariadb.jdbc.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -66,6 +66,18 @@ app:
   import:
     batch-size: 300
     max-rows: 10000
+
+  wechat:
+    appid: ${WECHAT_APPID:}
+    secret: ${WECHAT_SECRET:}
+    mock-openid-when-disabled: true
+
+  student:
+    auto-generate-no-prefix: S
+    max-children-per-parent: 6
+
+  security:
+    default-temp-password: "123456"
 
 logging:
   level:

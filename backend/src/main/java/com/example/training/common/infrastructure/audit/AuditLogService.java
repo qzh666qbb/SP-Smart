@@ -2,6 +2,8 @@ package com.example.training.common.infrastructure.audit;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -12,6 +14,8 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 public class AuditLogService {
+    private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);
+
 
     private final JdbcTemplate jdbcTemplate;
 

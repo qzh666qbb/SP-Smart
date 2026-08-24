@@ -13,7 +13,10 @@ export default defineAppConfig({
     'pages/settings/index',
     'pages/parent-home/index',
     'pages/parent-course/index',
-    'pages/parent-physical/index'
+    'pages/parent-physical/index',
+    'pages/parent-register/index',
+    'pages/parent-children/index',
+    'pages/child-add-edit/index'
   ],
   window: {
     backgroundTextStyle: 'light',
@@ -23,6 +26,7 @@ export default defineAppConfig({
     backgroundColor: '#F8FAFC'
   },
   tabBar: {
+    custom: true,
     color: '#9CA3AF',
     selectedColor: '#3B82F6',
     backgroundColor: '#FFFFFF',

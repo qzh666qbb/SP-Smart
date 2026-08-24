@@ -1,6 +1,7 @@
 package com.example.training.auth.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.training.auth.domain.model.ParentProfile;
 import com.example.training.auth.domain.model.TeacherProfile;
 import com.example.training.auth.domain.model.User;
@@ -14,7 +15,9 @@ import com.example.training.auth.infrastructure.persistence.TeacherProfileMapper
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
@@ -69,6 +72,50 @@ public class UserRepositoryImpl implements UserRepository {
                         .isNull(SysUserEntity::getDeletedAt)
         );
         return Optional.ofNullable(entity).map(this::convertToDomain);
+    }
+
+    @Override
+    public List<User> findAll(int pageNum, int pageSize) {
+        return findAll(null, null, pageNum, pageSize);
+    }
+
+    @Override
+    public List<User> findAll(String keyword, String role, int pageNum, int pageSize) {
+        Page<SysUserEntity> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<SysUserEntity> wrapper = buildUserFilterWrapper(keyword, role);
+        wrapper.orderByDesc(SysUserEntity::getId);
+        return sysUserMapper.selectPage(page, wrapper).getRecords().stream()
+                .map(this::convertToDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public long countAll() {
+        return countAll(null, null);
+    }
+
+    @Override
+    public long countAll(String keyword, String role) {
+        return sysUserMapper.selectCount(buildUserFilterWrapper(keyword, role));
+    }
+
+    @Override
+    public void updateLastLoginAt(Long userId) {
+        sysUserMapper.updateLastLoginAt(userId);
+    }
+
+    private LambdaQueryWrapper<SysUserEntity> buildUserFilterWrapper(String keyword, String role) {
+        LambdaQueryWrapper<SysUserEntity> wrapper = new LambdaQueryWrapper<>();
+        wrapper.isNull(SysUserEntity::getDeletedAt);
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = "%" + keyword.trim() + "%";
+            wrapper.and(w -> w.like(SysUserEntity::getUsername, kw)
+                    .or().like(SysUserEntity::getPhone, kw));
+        }
+        if (role != null && !role.isBlank()) {
+            wrapper.eq(SysUserEntity::getRole, role.trim());
+        }
+        return wrapper;
     }
     
     @Override

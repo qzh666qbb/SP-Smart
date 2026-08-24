@@ -8,6 +8,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +25,8 @@ import java.util.Collections;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     
     private final JwtService jwtService;
     
@@ -37,10 +41,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String username = jwtService.extractUsername(jwt);
                 String role = jwtService.extractRole(jwt);
                 
+                String phone = jwtService.extractPhone(jwt);
+                Long profileId = jwtService.extractProfileId(jwt);
+                String profileType = jwtService.extractProfileType(jwt);
+
                 CurrentUser currentUser = CurrentUser.builder()
                         .userId(userId)
                         .username(username)
                         .role(role)
+                        .phone(phone)
+                        .profileId(profileId)
+                        .profileType(profileType)
                         .build();
                 
                 UsernamePasswordAuthenticationToken authToken = 

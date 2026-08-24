@@ -32,11 +32,14 @@ public class JwtService {
         return Keys.hmacShaKeyFor(keyBytes);
     }
     
-    public String generateAccessToken(Long userId, String username, String role) {
+    public String generateAccessToken(Long userId, String username, String role, String phone, Long profileId, String profileType) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put("role", role);
+        if (phone != null) claims.put("phone", phone);
+        if (profileId != null) claims.put("profileId", profileId);
+        if (profileType != null) claims.put("profileType", profileType);
         return Jwts.builder()
                 .claims(claims)
                 .subject(username)
@@ -44,6 +47,24 @@ public class JwtService {
                 .expiration(Date.from(Instant.now().plusSeconds(accessTokenExpireSeconds)))
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    public String extractPhone(String token) {
+        Claims claims = parseToken(token);
+        return claims.get("phone", String.class);
+    }
+
+    public Long extractProfileId(String token) {
+        Claims claims = parseToken(token);
+        Object v = claims.get("profileId");
+        if (v == null) return null;
+        if (v instanceof Number) return ((Number) v).longValue();
+        try { return Long.valueOf(v.toString()); } catch (Exception e) { return null; }
+    }
+
+    public String extractProfileType(String token) {
+        Claims claims = parseToken(token);
+        return claims.get("profileType", String.class);
     }
     
     public String generateRefreshToken(Long userId, String username) {

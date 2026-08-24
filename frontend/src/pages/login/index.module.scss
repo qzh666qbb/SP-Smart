@@ -44,7 +44,7 @@
   display: flex;
   border-radius: $radius-md;
   background: $color-bg-hover;
-  margin-bottom: $spacing-xl;
+  margin-bottom: $spacing-lg;
   
   .roleOption {
     flex: 1;
@@ -59,6 +59,39 @@
       background: $color-primary;
       color: $color-text-white;
       font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.loginModeTabs {
+  display: flex;
+  border-bottom: 2rpx solid $color-divider;
+  margin-bottom: $spacing-xl;
+
+  .loginModeTab {
+    flex: 1;
+    padding: $spacing-md 0;
+    text-align: center;
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    position: relative;
+    transition: all $transition-fast;
+
+    &.active {
+      color: $color-primary;
+      font-weight: $font-weight-semibold;
+
+      &::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -2rpx;
+        transform: translateX(-50%);
+        width: 48rpx;
+        height: 4rpx;
+        background: $color-primary;
+        border-radius: 2rpx;
+      }
     }
   }
 }
@@ -90,6 +123,32 @@
       border-color: $color-primary;
     }
   }
+}
+
+.registerRow {
+  margin-top: $spacing-lg;
+  text-align: center;
+
+  .registerLink {
+    font-size: $font-size-sm;
+    color: $color-primary;
+  }
+}
+
+.wechatLoginWrap {
+  padding: $spacing-md 0 $spacing-lg;
+}
+
+.wechatLoginBtn {
+  margin-bottom: $spacing-md;
+}
+
+.agreementText {
+  display: block;
+  text-align: center;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  line-height: $line-height-normal;
 }
 
 .tips {

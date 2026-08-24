@@ -1,0 +1,27 @@
+package com.example.training.teacher.domain.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Data
+public class TeacherApply {
+
+    private Long id;
+    private String phone;
+    private String realName;
+    private String wechatOpenid;
+    private String status;
+    private Long reviewerId;
+    private String reviewComment;
+    private LocalDateTime reviewedAt;
+    private Long createdBy;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}

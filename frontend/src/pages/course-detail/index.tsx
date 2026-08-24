@@ -5,7 +5,12 @@ import Card from '@/components/Card';
 import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
 import { Lesson, Student } from '@/types';
-import { getSchedules, signIn, completeCourse } from '@/services/api';
+import {
+  getSchedules,
+  signIn,
+  completeCourse,
+  getLessonAttendance,
+} from '@/services/api';
 import { formatDate, formatTime } from '@/utils/format';
 import styles from './index.module.scss';
 
@@ -13,37 +18,47 @@ interface StudentWithSignIn extends Student {
   signed: boolean;
 }
 
-const mockStudents: StudentWithSignIn[] = [
-  { id: '1', name: '张三', age: 12, gender: 'MALE', studentNo: 'S001', signed: false, parentName: '张爸爸', parentPhone: '13800138001' },
-  { id: '2', name: '李四', age: 12, gender: 'FEMALE', studentNo: 'S002', signed: true, parentName: '李妈妈', parentPhone: '13800138002' },
-  { id: '3', name: '王五', age: 13, gender: 'MALE', studentNo: 'S003', signed: false, parentName: '王爸爸', parentPhone: '13800138003' },
-  { id: '4', name: '赵六', age: 12, gender: 'FEMALE', studentNo: 'S004', signed: true, parentName: '赵妈妈', parentPhone: '13800138004' },
-  { id: '5', name: '钱七', age: 13, gender: 'MALE', studentNo: 'S005', signed: false, parentName: '钱爸爸', parentPhone: '13800138005' },
-  { id: '6', name: '孙八', age: 12, gender: 'FEMALE', studentNo: 'S006', signed: false, parentName: '孙妈妈', parentPhone: '13800138006' },
-];
-
 export default function CourseDetailPage() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [students, setStudents] = useState<StudentWithSignIn[]>(mockStudents);
+  const [students, setStudents] = useState<StudentWithSignIn[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const options = Taro.getCurrentInstance()?.router?.params;
     if (options?.id) {
-      fetchLesson(options.id);
+      fetchLesson(String(options.id));
     }
   }, []);
 
   const fetchLesson = async (id: string) => {
+    setIsLoading(true);
     try {
-      const schedules = await getSchedules();
-      const found = schedules.find(s => s.id === id);
+      const [schedules, attendance] = await Promise.all([
+        getSchedules().catch(() => []),
+        getLessonAttendance({ lessonId: id }).catch(() => []),
+      ]);
+      const found = schedules.find(s => String(s.id) === String(id));
       if (found) {
         setLesson(found);
+      } else {
+        setLesson({ id, lessonNo: `ID:${id}`, status: 'SCHEDULED' } as any);
+      }
+      if (Array.isArray(attendance) && attendance.length > 0) {
+        setStudents(attendance.map((a: any) => ({
+          id: String(a.studentId || a.id),
+          name: a.studentName || '未知',
+          studentNo: a.studentNo || ('ID:' + (a.studentId || a.id)),
+          gender: undefined,
+          signed: a.status === 'PRESENT',
+          attendanceStatus: a.status,
+        } as StudentWithSignIn)));
       }
     } catch (err) {
-      console.error('[CourseDetailPage]', err);
+      console.error('[CourseDetailPage.fetchLesson]', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -73,12 +88,10 @@ export default function CourseDetailPage() {
     setIsSubmitting(true);
     try {
       await signIn({ lessonId: lesson!.id, studentIds: selectedStudents });
-      
-      setStudents(students.map(s => 
+      setStudents(students.map(s =>
         selectedStudents.includes(s.id) ? { ...s, signed: true } : s
       ));
       setSelectedStudents([]);
-      
       Taro.showToast({ title: `成功签到 ${selectedStudents.length} 人`, icon: 'success' });
     } catch (err) {
       console.error('[CourseDetailPage]', err);
@@ -114,10 +127,18 @@ export default function CourseDetailPage() {
 
   const signedCount = students.filter(s => s.signed).length;
 
-  if (!lesson) {
+  if (!lesson && isLoading) {
     return (
       <View className={styles.container}>
         <Text>加载中...</Text>
+      </View>
+    );
+  }
+
+  if (!lesson) {
+    return (
+      <View className={styles.container}>
+        <Text>找不到该课程</Text>
       </View>
     );
   }
@@ -140,22 +161,24 @@ export default function CourseDetailPage() {
 
         <View className={styles.timeRow}>
           <Text className={styles.label}>课程编号</Text>
-          <Text className={styles.value}>{lesson.lessonNo}</Text>
+          <Text className={styles.value}>{lesson.lessonNo || `ID:${lesson.id}`}</Text>
         </View>
 
         <View className={styles.timeRow}>
-          <Text className={styles.label}>授课老师</Text>
-          <Text className={styles.value}>张老师</Text>
+          <Text className={styles.label}>课程地点</Text>
+          <Text className={styles.value}>{lesson.location || '未设置'}</Text>
         </View>
 
         <View className={styles.timeRow}>
           <Text className={styles.label}>班级</Text>
-          <Text className={styles.value}>初一(1)班</Text>
+          <Text className={styles.value}>
+            {lesson.classGroupId ? `班级ID:${lesson.classGroupId}` : students.length > 0 ? `${students.length}名学员` : '未分配'}
+          </Text>
         </View>
 
         <View className={styles.timeRow}>
           <Text className={styles.label}>签到情况</Text>
-          <Text className={`${styles.value} ${signedCount === students.length ? styles.allSigned : ''}`}>
+          <Text className={`${styles.value} ${signedCount === students.length && students.length > 0 ? styles.allSigned : ''}`}>
             {signedCount}/{students.length} 已签到
           </Text>
         </View>
@@ -177,38 +200,39 @@ export default function CourseDetailPage() {
             </Text>
           )}
         </View>
-        
+
         <View className={styles.studentList}>
-          {students.map(student => (
-            <View key={student.id} className={`${styles.studentItem} ${selectedStudents.includes(student.id) ? styles.selected : ''}`}>
-              {(lesson.status === 'IN_PROGRESS' || lesson.status === 'SCHEDULED') && (
-                <View 
-                  className={`${styles.checkbox} ${student.signed ? styles.signed : ''} ${!student.signed && selectedStudents.includes(student.id) ? styles.checked : ''}`}
-                  onClick={(e: any) => { 
-                    e.stopPropagation && e.stopPropagation(); 
-                    if (!student.signed) {
-                      toggleStudent(student.id);
-                    }
-                  }}
-                />
-              )}
-              <View className={styles.studentAvatar}>
-                <Text className={styles.avatarText}>{student.name[0]}</Text>
-              </View>
-              <View className={styles.studentInfo}>
-                <Text className={styles.studentName}>{student.name}</Text>
-                <Text className={styles.studentNo}>{student.studentNo}</Text>
-                {student.parentName && (
-                  <Text className={styles.parentInfo}>{student.parentName} {student.parentPhone}</Text>
+          {students.length === 0 ? (
+            <View style={{ padding: 24 }}>
+              <Text style={{ color: '#999' }}>该课程暂无学员数据</Text>
+            </View>
+          ) : (
+            students.map(student => (
+              <View key={student.id} className={`${styles.studentItem} ${selectedStudents.includes(student.id) ? styles.selected : ''}`}>
+                {(lesson.status === 'IN_PROGRESS' || lesson.status === 'SCHEDULED') && (
+                  <View
+                    className={`${styles.checkbox} ${student.signed ? styles.signed : ''} ${!student.signed && selectedStudents.includes(student.id) ? styles.checked : ''}`}
+                    onClick={(e: any) => {
+                      e.stopPropagation && e.stopPropagation();
+                      if (!student.signed) toggleStudent(student.id);
+                    }}
+                  />
+                )}
+                <View className={styles.studentAvatar}>
+                  <Text className={styles.avatarText}>{student.name[0]}</Text>
+                </View>
+                <View className={styles.studentInfo}>
+                  <Text className={styles.studentName}>{student.name}</Text>
+                  <Text className={styles.studentNo}>{student.studentNo || ''}</Text>
+                </View>
+                {student.signed ? (
+                  <Tag type="success">已签到</Tag>
+                ) : (
+                  <Tag type="info">未签到</Tag>
                 )}
               </View>
-              {student.signed ? (
-                <Tag type="success">已签到</Tag>
-              ) : (
-                <Tag type="info">未签到</Tag>
-              )}
-            </View>
-          ))}
+            ))
+          )}
         </View>
       </Card>
 

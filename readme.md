@@ -15,6 +15,7 @@
 8. 安全与审计机制
 9. 网络与域名部署说明
 10. 后续扩展方向
+11. 附录 A：全链路测试执行 Prompt 汇总
 
 ***
 
@@ -196,4 +197,171 @@
 6. 体测报告重新生成，保留历史报告记录，不直接覆盖旧报告；
 7. 家长访问接口后端强制做数据权限过滤，**不能仅依靠前端隐藏页面**；
 8. 教师只能查看自身操作日志；管理员可查看全系统日志。
+
+***
+
+## 附录 A：SP-Smart 全链路测试执行 Prompt 汇总
+
+> 以下为可直接供 AI Agent 复现的标准化测试 Prompt，按优先级分级，覆盖 P0 Bug 修复 → 资金链路回归 → 并发/安全基线 → UI/性能 → 单元测试 共 7 大阶段，实际执行结果见"验证结果"。
+
+---
+
+### 🔴 P0 级：核心 Bug 修复与验证
+
+#### A.1 修复 4 个 P0 级 Bug (代码修复 Prompt)
+
+> **Prompt**: 
+> 请修复 `ScheduleCompletionService`、`HourApplicationService`、`GlobalExceptionHandler` 中的 4 个 P0 级 Bug：
+> 1. **Bug A（消课课时漏拷）**：在创建 `LessonStudent` 时，显式调用 `setConsumeHours(lesson.getConsumeHours())` 将课时从课程同步到学员排课记录，防止默认值 0 导致的"零消课但标记已消课"。
+> 2. **Bug B（0 课时死锁）**：在 `completeLessonWithAutoConsume` 中增加 `if (consumeAmount.compareTo(BigDecimal.ZERO) > 0)` 判断，仅在课时 > 0 时执行扣减与 `shouldConsume=true` 设置。
+> 3. **Bug C（事务 ID 关联错误）**：`consume` 返回 `HourTransaction` 对象，在 `completeLessonWithAutoConsume` 中将 `transaction.getId()` 赋给 `lessonStudent.setHourTransactionId`（不要使用账户 ID），确保退款链路能通过流水 ID 回溯。
+> 4. **Bug D（异常码不合规）**：在 `GlobalExceptionHandler` 中新增 `@ExceptionHandler(BusinessException.class)`，根据 `ErrorCode.resolveHttpStatus()` 映射为 HTTP 400/401/403/409，禁止业务异常包装为 500。
+
+**验证结果**：4 个 Bug 修复，T2 消课链路 25/25 PASS。
+
+---
+
+#### A.2 消课全链路 E2E 回归 (验证 Prompt)
+
+> **Prompt**:
+> 请编写 Node.js 脚本 `/tmp/t2_hours_consume_v2.js`，按"DB ↔ API 双查"闭环执行：
+> 1. **准备数据**：admin 登录 → 为学员 `SID=42` 充值 10 课时，DB 直查 `student_hour_account.remaining_hours=10`。
+> 2. **排课**：创建 ONE_TO_ONE 排课 (courseId=2, 2 课时)，DB 直查 `lesson_student.consume_hours=2.00`。
+> 3. **签到→消课**：标记学员 SID=42 为 PRESENT，然后 `completeLessonWithAutoConsume`，期望：
+>    - DB：`remaining_hours=8`，`lesson_student.should_consume=1`，`lesson_student.hour_transaction_id = hour_transaction.id`
+>    - API：学员余额接口返回 8。
+> 4. **退款**：`cancelLessonWithRefund` → 余额恢复为 10，生成 REFUND 流水。
+> 5. **幂等性**：再次 `complete` 已取消课程 → HTTP 400/409 错误码。
+
+**验证结果**：全链路 25/25 PASS，取消课程成功回滚课时。
+
+---
+
+### 🟠 P1 级：关键业务与安全验证
+
+#### A.3 并发冲突与幂等性测试
+
+> **Prompt**:
+> 编写并发脚本 `/tmp/t3_concurrency_fixed.js` 或使用 `k6`，验证：
+> 1. **并发考勤**：同一节课同一学员并发 3 次 PRESENT 请求，`lesson_student` 最终只写入 1 条（或只更新 1 次）。
+> 2. **并发消课**：并发 2 次 `completeLessonWithAutoConsume`，`student_hour_account` 只扣减 1 次，`hour_transaction` 仅生成 1 条 CONSUME 流水（version 乐观锁生效）。
+> 3. **异常捕获**：第二次请求因第一次已完成应抛出 `OPERATION_NOT_ALLOWED`，HTTP 状态码必须为 400/409（非 500）。
+
+**验证结果**：T3 并发 16/16 PASS，乐观锁生效。
+
+---
+
+#### A.4 T4 安全基线 (JWT + IDOR)
+
+> **Prompt**:
+> 编写脚本 `/tmp/t4_security_baseline.js` 覆盖 21 条检查：
+> 1. **JWT 格式**：`Authorization: <token>`（无 Bearer 前缀）→ HTTP 401；
+> 2. **Token 篡改**：Payload/Signature 换一个字符 → HTTP 401 `Token Invalid`；
+> 3. **IDOR（越权）**：
+>    - 家长访问非亲生子女 (`SID≠绑定SID`) 的考勤/体测写入 → HTTP 403；
+>    - 教师访问 `/api/admin/**` 管理接口 → HTTP 403；
+>    - 家长尝试修改非亲生子女课时 → HTTP 403；
+>    - ADMIN 正确绕过 `ParentPermissionService.canAccessStudent` 校验。
+
+**验证结果**：T4 21/21 PASS，`JwtAuthenticationFilter` 和 `ParentPermissionService` 生效。
+
+---
+
+### 🔵 P2 级：UI/UX 与性能测试
+
+#### A.5 家长端/管理端 UI 数据真实性验证 (Browser E2E)
+
+> **Prompt**:
+> 使用 Browser Agent，按"DB ↔ API ↔ UI"三段式闭环验证：
+> 1. **家长端 H5 小程序 (http://localhost:3030)**：
+>    - 清理全部 Storage + 强刷后，登录 `parent01`；
+>    - 进入「我的课时」页面，查看余额与流水条目，与接口返回、DB 直查三端相等；
+>    - 确认页面**不是**纯前端 Mock（Network 面板出现 `/api/parent/**` 请求，响应码 200）。
+> 2. **管理端 Web (http://localhost:3031)**：
+>    - 学员档案详情页的课时余额，与 API + DB 对比；
+>    - 排课管理页面展示的课程及学员信息与 DB 一致（含状态/课时字段）。
+
+**验证结果**：T5 三端数据完全一致，排除 Mock/伪渲染。
+
+---
+
+#### A.6 T6 性能基准测试 (开学季场景)
+
+> **Prompt**:
+> 请使用 `k6` 执行性能基准测试，脚本存放到 `/tmp/perf_test.js`：
+> 1. **场景**：开学季高并发；
+> 2. **压测接口**：
+>    - `POST /api/auth/login`（20 VU，多用户轮询）
+>    - `GET /api/business/students`（50 VU，ADMIN/TEACHER 账户池）
+>    - `POST /api/business/schedules`（10 VU，courseId 必须是数据库真实存在的 ID）
+> 3. **并发修复优化**：
+>    - 登录 `sys_user.last_login_at` 更新改为轻量 SQL（`@Update UPDATE sys_user SET last_login_at=NOW(), updated_at=NOW() WHERE id=?`），并用 try-catch 吞掉乐观锁冲突。
+> 4. **目标**：`p95 latency < 500ms`，`http_req_failed rate < 0.1%`。
+> 5. **阈值配置**：
+>    - `http_req_duration p(95)<500`
+>    - `http_req_failed rate<0.001`
+>    - 三个场景各单独的自定义 Trend `p(95)<500`
+
+**验证结果**：
+| 指标 | 登录 | 学生列表 | 排课 | 阈值 |
+|------|------|------|------|------|
+| p95 Latency | 273ms | 146ms | 148ms | <500ms ✅ |
+| Error Rate | 0.00% | 0.00% | 0.00% | <0.1% ✅ |
+
+---
+
+### 🟣 开发态：单元测试与 Jacoco 覆盖率
+
+#### A.7 JUnit + Mockito + Jacoco 单测
+
+> **Prompt**:
+> 请为以下 3 个核心类编写 JUnit 5 + Mockito 单元测试，并在 `pom.xml` 配置 `jacoco-maven-plugin` 强制 BRANCH 覆盖率 ≥ 80%：
+> 1. **`HourApplicationService`**：
+>    - `consume`：余额充足扣减（EXPERIENCE→ACTIVITY→GIFT→PAID 优先级）；余额不足抛 `HOUR_INSUFFICIENT`；账户不存在抛 `STUDENT_NOT_FOUND`；`allowNegativeBalance=true` 负数允许；`MybatisPlusException` 乐观锁转换为 `OPERATION_NOT_ALLOWED`；零金额正常返回。
+>    - `refund` / `refundByTransaction`：PAID/GIFT/EXPERIENCE/ACTIVITY/NULL 五种来源分别进入对应桶；流水不存在、非 CONSUME、已被退回等抛 `HOUR_TRANSACTION_FAILED`；乐观锁冲突转换异常。
+>    - `recharge`：5 种 hourSource switch（PAID null 默认、EXPERIENCE、ACTIVITY、GIFT、UNKNOWN 兜底 PAID）；已有账户 vs 新账户；expireDate 在非 PAID 时置空；reason 为空走默认值。
+>    - `listAccounts`：分页参数归一化（pageNum<1→1，pageSize>500→500，studentId=null 跳过，id=null fallback studentId）。
+> 2. **`ScheduleCompletionService`**：
+>    - `completeLessonWithAutoConsume`：PENDING/PRESENT 正常消课（lessonStudent consumeHours > lesson > ONE 三级 fallback）；0 课时跳过；shouldConsume=true 不重复消课；非 PRESENT 不处理；`isCompleted/isCancelled` 抛 OPERATION_NOT_ALLOWED；`MybatisPlusException`/`DataAccessException` 两种冲突异常各走分支；lesson 不存在抛 `LESSON_NOT_FOUND`。
+>    - `cancelLessonWithRefund`：已消课学员触发退回，shouldConsume=false 不退回；已取消拦截；乐观锁/DAO 冲突异常。
+> 3. **`AuthenticationController`**：
+>    - `login`：成功（admin/teacher/parent 各角色字段正确返回）、密码错 (`AUTH_INVALID_CREDENTIALS`)、账号禁用 (`AUTH_ACCOUNT_DISABLED`)。
+>    - `loginByWechat`、`refreshToken`（有效/无效）、`getCurrentUser`（有 user/null 抛 401）。
+> 4. **Jacoco 配置**：
+>    ```xml
+>    <plugin>
+>      <groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId><version>0.8.11</version>
+>      <executions>
+>        <execution><id>prepare-agent</id><goals><goal>prepare-agent</goal></goals></execution>
+>        <execution><id>report</id><phase>test</phase><goals><goal>report</goal></goals></execution>
+>        <execution><id>jacoco-check</id><goals><goal>check</goal></goals>
+>          <configuration><rules><rule><element>CLASS</element>
+>            <includes>
+>              <include>com.example.training.hour.application.service.HourApplicationService</include>
+>              <include>com.example.training.schedule.application.service.ScheduleCompletionService</include>
+>              <include>com.example.training.auth.controller.AuthenticationController</include>
+>            </includes>
+>            <limits><limit><counter>BRANCH</counter><value>COVEREDRATIO</value><minimum>0.80</minimum></limit></limits>
+>          </rule></rules></configuration>
+>        </execution>
+>      </executions>
+>    </plugin>
+>    ```
+> 5. **测试方法**：手动 `@Mock` + `@InjectMocks` + `@ExtendWith(MockitoExtension.class)`，用 `ReflectionTestUtils.setField` 设置 `@Value` 的 allowNegativeBalance 等字段，**避免启动 Spring 上下文**。
+
+**验证结果**：59/59 用例通过，Jacoco check `All coverage checks have been met`：
+
+| 类 | 指令覆盖 | 分支覆盖 |
+|---|---|---|
+| HourApplicationService | 99% | **91%** |
+| ScheduleCompletionService | 100% | **95%** |
+| AuthenticationController | 100% | **100%** |
+
+---
+
+## 10. 后续扩展方向
+
+- **单测补充（P1，可选）**：`AuthenticationService`（密码校验 + 微信登录建用户）、`GlobalExceptionHandler`（HTTP 状态码映射）、`JwtAuthenticationFilter`（JWT 格式）、`ParentPermissionService`（IDOR 数据权限）。
+- **集成测试（P2）**：用 `@SpringBootTest` + H2 + 手动 `ExecutorService` 验证乐观锁真实并发回滚行为、`@Valid` 参数校验返回的 HTTP 400 结构。
+- **E2E 自动回归（P3）**：将 T2/T3/T4/T5/T6 的脚本模板固化为 CI 中可一键执行的命令，形成"资金链路 ↔ 安全基线 ↔ 性能阈值"三段式强制门禁。
 

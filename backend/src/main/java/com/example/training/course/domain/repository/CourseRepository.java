@@ -28,7 +28,9 @@ public interface CourseRepository {
     
     List<ClassGroup> findAllClassGroups();
     
-    void addStudentsToClassGroup(Long classGroupId, List<Long> studentIds);
+    void addStudentsToClassGroup(Long classGroupId, List<Long> studentIds, Long createdBy);
     
     void removeStudentsFromClassGroup(Long classGroupId, List<Long> studentIds);
+
+    List<Long> findStudentIdsByClassGroupId(Long classGroupId);
 }

@@ -3,26 +3,49 @@ export type TransactionType = 'RECHARGE' | 'CONSUMPTION' | 'REFUND' | 'ADJUSTMEN
 export interface StudentHourAccount {
   id: string;
   studentId: string;
-  balance: number;
-  totalRecharge: number;
-  totalConsume: number;
-  totalRefund: number;
+  studentName?: string;
+  studentNo?: string;
+  parentName?: string;
+  parentPhone?: string;
+  /** 旧 mock 字段兼容 */
+  balance?: number;
+  totalRecharge?: number;
+  totalConsume?: number;
+  totalRefund?: number;
+  /** 后端真实字段 */
+  totalHours?: number;
+  totalRecharged?: number;
+  usedHours?: number;
+  totalConsumed?: number;
+  totalRefunded?: number;
+  remainingHours?: number;
+  paidHours?: number;
+  giftHours?: number;
   createTime?: string;
   updateTime?: string;
 }
 
 export interface HourTransaction {
   id: string;
-  transactionNo: string;
+  transactionNo?: string;
   studentId: string;
-  transactionType: TransactionType;
-  amount: number;
-  balanceBefore: number;
-  balanceAfter: number;
+  transactionType?: TransactionType | string;
+  /** 旧字段兼容 */
+  amount?: number;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  idempotencyKey?: string;
+  /** 后端真实字段 */
+  changeAmount?: number;
+  beforeBalance?: number;
+  afterBalance?: number;
+  reason?: string;
+  remark?: string;
+  hourSource?: string;
   relatedLessonId?: string;
   operatorId?: string;
-  remark?: string;
-  idempotencyKey: string;
+  operatorRole?: string;
+  expireDate?: string;
   createTime?: string;
 }
 

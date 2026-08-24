@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,4 +29,18 @@ public class PhysicalTestTemplate {
     public boolean isActive() {
         return "ACTIVE".equals(status);
     }
+
+    public Long getId() { return id; }    public void setId(Long id) { this.id = id; }
+    public String getTemplateName() { return templateName; }    public void setTemplateName(String templateName) { this.templateName = templateName; }
+    public String getTemplateCode() { return templateCode; }    public void setTemplateCode(String templateCode) { this.templateCode = templateCode; }
+    public String getTargetGender() { return targetGender; }    public void setTargetGender(String targetGender) { this.targetGender = targetGender; }
+    public Integer getMinAge() { return minAge; }    public void setMinAge(Integer minAge) { this.minAge = minAge; }
+    public Integer getMaxAge() { return maxAge; }    public void setMaxAge(Integer maxAge) { this.maxAge = maxAge; }
+    public String getDescription() { return description; }    public void setDescription(String description) { this.description = description; }
+    public String getStatus() { return status; }    public void setStatus(String status) { this.status = status; }
+    public Long getCreatedBy() { return createdBy; }    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+    public LocalDateTime getCreatedAt() { return createdAt; }    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Long getUpdatedBy() { return updatedBy; }    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public LocalDateTime getDeletedAt() { return deletedAt; }    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
 }

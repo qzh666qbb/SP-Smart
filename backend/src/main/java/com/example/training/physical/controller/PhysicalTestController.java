@@ -1,7 +1,13 @@
 package com.example.training.physical.controller;
 
+import com.example.training.common.exception.BusinessException;
+import com.example.training.common.exception.ErrorCode;
 import com.example.training.common.response.ApiResponse;
+import com.example.training.common.response.PageRequest;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
+import com.example.training.common.security.ParentPermissionService;
+import com.example.training.common.security.TeacherPermissionService;
 import com.example.training.physical.application.dto.PhysicalTestCreateRequest;
 import com.example.training.physical.application.service.PhysicalTestApplicationService;
 import com.example.training.physical.domain.model.PhysicalScoreDetail;
@@ -21,7 +27,9 @@ import java.util.List;
 public class PhysicalTestController {
     
     private final PhysicalTestApplicationService physicalTestApplicationService;
-    
+    private final ParentPermissionService parentPermissionService;
+    private final TeacherPermissionService teacherPermissionService;
+
     @PostMapping("/business/physical-tests")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ApiResponse<PhysicalTestRecord> createTestRecord(
@@ -33,8 +41,13 @@ public class PhysicalTestController {
     
     @GetMapping("/business/physical-tests")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<List<PhysicalTestRecord>> listTestRecords(@AuthenticationPrincipal CurrentUser currentUser) {
-        List<PhysicalTestRecord> response = physicalTestApplicationService.listTestRecords(currentUser.getProfileId());
+    public ApiResponse<PageResult<PhysicalTestRecord>> listTestRecords(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            PageRequest pageRequest,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        Long testerId = "ADMIN".equals(currentUser.getRole()) ? null : currentUser.getProfileId();
+        PageResult<PhysicalTestRecord> response = physicalTestApplicationService.listTestRecordsPage(
+                testerId, keyword, pageRequest.getPageNum(), pageRequest.getPageSize());
         return ApiResponse.success(response);
     }
     
@@ -53,6 +66,13 @@ public class PhysicalTestController {
             @AuthenticationPrincipal CurrentUser currentUser) {
         PhysicalTestRecord response = physicalTestApplicationService.updateRecord(recordId, request, currentUser);
         return ApiResponse.success(response);
+    }
+    
+    @DeleteMapping("/business/physical-tests/{recordId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Void> deleteRecord(@PathVariable Long recordId) {
+        physicalTestApplicationService.deleteTestRecord(recordId);
+        return ApiResponse.success();
     }
     
     @PostMapping("/business/physical-tests/{recordId}/confirm")
@@ -79,15 +99,33 @@ public class PhysicalTestController {
     }
     
     @GetMapping("/parent/physical-tests/{studentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
-    public ApiResponse<List<PhysicalTestRecord>> getRecordsByStudent(@PathVariable Long studentId) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT', 'TEACHER')")
+    public ApiResponse<List<PhysicalTestRecord>> getRecordsByStudent(
+            @PathVariable Long studentId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("PARENT".equals(currentUser.getRole())
+                && !parentPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员体测信息");
+        } else if ("TEACHER".equals(currentUser.getRole())
+                && !teacherPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员体测信息");
+        }
         List<PhysicalTestRecord> response = physicalTestApplicationService.getRecordsByStudent(studentId);
         return ApiResponse.success(response);
     }
     
     @GetMapping("/parent/physical-tests/{studentId}/latest")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
-    public ApiResponse<PhysicalTestRecord> getLatestRecord(@PathVariable Long studentId) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT', 'TEACHER')")
+    public ApiResponse<PhysicalTestRecord> getLatestRecord(
+            @PathVariable Long studentId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("PARENT".equals(currentUser.getRole())
+                && !parentPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员体测信息");
+        } else if ("TEACHER".equals(currentUser.getRole())
+                && !teacherPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员体测信息");
+        }
         PhysicalTestRecord response = physicalTestApplicationService.getLatestRecord(studentId);
         return ApiResponse.success(response);
     }

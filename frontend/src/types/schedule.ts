@@ -30,6 +30,8 @@ export interface Lesson {
   endTime: string;
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   cancelReason?: string;
+  location?: string;
+  consumeHours?: number;
   createTime?: string;
   studentAttendance?: Record<string, AttendanceStatus>;
 }

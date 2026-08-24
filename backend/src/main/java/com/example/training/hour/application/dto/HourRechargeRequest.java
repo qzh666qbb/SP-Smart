@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,4 +24,9 @@ public class HourRechargeRequest {
     private String reason;
     
     private String hourSource;
+
+    public Long getStudentId() { return studentId; }    public void setStudentId(Long studentId) { this.studentId = studentId; }
+    public BigDecimal getAmount() { return amount; }    public void setAmount(BigDecimal amount) { this.amount = amount; }
+    public String getReason() { return reason; }    public void setReason(String reason) { this.reason = reason; }
+    public String getHourSource() { return hourSource; }    public void setHourSource(String hourSource) { this.hourSource = hourSource; }
 }

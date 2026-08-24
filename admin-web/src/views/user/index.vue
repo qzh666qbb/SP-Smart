@@ -5,7 +5,7 @@
         <h2>用户管理</h2>
         <p class="page-desc">管理系统用户账号，包括管理员、教师和家长</p>
       </div>
-      <el-button type="primary" class="btn-primary" @click="showAddModal = true">
+      <el-button type="primary" class="btn-primary" @click="handleAdd">
         <el-icon><el-icon-plus /></el-icon>
         新增用户
       </el-button>
@@ -34,11 +34,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="140" />
-        <el-table-column label="操作" width="180">
+        <el-table-column label="操作" width="260">
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button type="primary" size="small" class="btn-edit" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger" size="small" class="btn-delete" @click="handleDelete(row)">删除</el-button>
+              <el-button type="danger" size="small" class="btn-delete" @click.stop="handleDelete(row)">删除</el-button>
+              <el-button link type="primary" size="small" @click="handleResetPassword(row)">重置密码</el-button>
             </div>
           </template>
         </el-table-column>
@@ -82,12 +83,25 @@
         <el-button type="primary" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="showResetPwdModal" :title="`重置密码 - 用户名 ${resetPwdTarget.username || ''}`" width="420px" class="custom-dialog">
+      <el-form :model="resetPwdForm" class="modal-form">
+        <el-form-item label="新密码">
+          <el-input v-model="resetPwdForm.newPassword" type="password" show-password placeholder="留空默认重置为 123456" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showResetPwdModal = false">取消</el-button>
+        <el-button type="primary" @click="handleSubmitResetPwd">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { getUsers, createUser, updateUser, deleteUser } from '@/api'
+import { ref, reactive, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getUsers, createUser, updateUser, deleteUser, resetUserPassword } from '@/api'
 
 const tableData = ref([])
 const searchForm = reactive({ keyword: '', role: '' })
@@ -101,14 +115,20 @@ const form = reactive({
   username: '',
   password: '',
   phone: '',
-  role: 'TEACHER'
+  role: 'TEACHER',
+  status: 'ENABLED'
 })
 
-const rules = {
+const showResetPwdModal = ref(false)
+const resetPwdTarget = reactive({ id: '', username: '' })
+const resetPwdForm = reactive({ newPassword: '' })
+
+const rules = computed(() => ({
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: !isEdit.value, message: '请输入密码', trigger: 'blur' }],
+  password: [{ required: !isEdit.value || (form.password && form.password.length > 0), message: '请输入密码', trigger: 'blur' }, { min: 6, message: '密码至少 6 位', trigger: 'blur' }],
+  phone: [{ pattern: /^(1[3-9]\d{9})?$/, message: '手机号格式不正确（留空或 11 位有效手机号）', trigger: 'blur' }],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }]
-}
+}))
 
 const getRoleType = (role) => {
   const map = { ADMIN: 'danger', TEACHER: 'primary', PARENT: 'success' }
@@ -130,10 +150,12 @@ const tableRowClassName = ({ rowIndex }) => {
 const fetchData = async () => {
   try {
     const res = await getUsers({ ...searchForm, ...pagination })
-    tableData.value = res.list || res
-    pagination.total = res.total || tableData.value.length
+    tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    tableData.value = []
+    pagination.total = 0
   }
 }
 
@@ -159,22 +181,65 @@ const handleCurrentChange = (page) => {
   fetchData()
 }
 
+const handleAdd = () => {
+  isEdit.value = false
+  form.id = ''
+  form.username = ''
+  form.password = ''
+  form.phone = ''
+  form.role = 'TEACHER'
+  form.status = 'ENABLED'
+  showAddModal.value = true
+}
+
 const handleEdit = (row) => {
   isEdit.value = true
   form.id = row.id
   form.username = row.username
-  form.phone = row.phone
+  form.phone = row.phone || ''
   form.role = row.role
   form.password = ''
+  form.status = row.status || 'ENABLED'
   showAddModal.value = true
 }
 
-const handleDelete = (row) => {
-  if (!confirm(`确定删除用户 ${row.username} ?`)) return
-  deleteUser(row.id).then(() => {
-    alert('删除成功')
+const handleDelete = async (row) => {
+  const target = row?.username ? `用户 ${row.username}` : '该用户'
+  try {
+    await ElMessageBox.confirm(`确定删除${target}？删除后不可撤销。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', distinguishCancelAndClose: true
+    })
+  } catch (_) { return }
+  try {
+    await deleteUser(row.id)
+    ElMessage.success('删除成功')
     fetchData()
-  }).catch(() => alert('删除失败'))
+  } catch (err) {
+    ElMessage.error(err?.message || '删除失败')
+  }
+}
+
+const normalizePayload = (obj, { stripId = false } = {}) => {
+  const out = { ...obj }
+  if (stripId) delete out.id
+  for (const k of Object.keys(out)) {
+    const v = out[k]
+    if (typeof v === 'string') {
+      const t = v.trim()
+      out[k] = t === '' ? null : t
+    }
+  }
+  return out
+}
+
+const buildErrorsText = (data) => {
+  if (!data || typeof data !== 'object') return ''
+  const parts = []
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v === 'string') parts.push(`${k}: ${v}`)
+    else if (Array.isArray(v)) parts.push(`${k}: ${v.join('; ')}`)
+  }
+  return parts.join(' | ')
 }
 
 const handleSubmit = async () => {
@@ -183,18 +248,38 @@ const handleSubmit = async () => {
     if (!valid) return
     try {
       if (isEdit.value) {
-        await updateUser(form.id, form)
-        alert('更新成功')
+        const payload = normalizePayload(form)
+        if (!payload.password) delete payload.password
+        await updateUser(form.id, payload)
+        ElMessage.success('更新成功')
       } else {
-        await createUser(form)
-        alert('创建成功')
+        const payload = normalizePayload(form, { stripId: true })
+        await createUser(payload)
+        ElMessage.success('创建成功')
       }
       showAddModal.value = false
       fetchData()
     } catch (err) {
-      alert('操作失败')
+      const detail = buildErrorsText(err?.response?.data?.data || err?.data)
+      ElMessage.error(detail ? `参数校验失败：${detail}` : (err?.message || '操作失败'))
     }
   })
+}
+
+const handleResetPassword = (row) => {
+  resetPwdTarget.id = row?.id || ''
+  resetPwdTarget.username = row?.username || ''
+  resetPwdForm.newPassword = ''
+  showResetPwdModal.value = true
+}
+
+const handleSubmitResetPwd = async () => {
+  try {
+    await resetUserPassword(resetPwdTarget.id, { newPassword: resetPwdForm.newPassword || '' })
+    showResetPwdModal.value = false
+  } catch (_) {
+    /* error handled by api wrapper */
+  }
 }
 
 fetchData()

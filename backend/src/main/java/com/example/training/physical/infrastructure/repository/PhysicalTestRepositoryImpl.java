@@ -125,9 +125,9 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
 
     @Override
     public List<PhysicalTestRecord> findByTesterId(Long testerId) {
-        return recordMapper.selectList(
-                new QueryWrapper<PhysicalTestRecordEntity>()
-                        .eq("tester_id", testerId))
+        QueryWrapper<PhysicalTestRecordEntity> wrapper = new QueryWrapper<>();
+        if (testerId != null) wrapper.eq("tester_id", testerId);
+        return recordMapper.selectList(wrapper)
                 .stream().map(this::toRecordModel).toList();
     }
 

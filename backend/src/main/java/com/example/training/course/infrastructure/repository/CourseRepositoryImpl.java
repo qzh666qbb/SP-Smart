@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.training.course.domain.model.ClassGroup;
 import com.example.training.course.domain.model.Course;
 import com.example.training.course.domain.repository.CourseRepository;
+import com.example.training.course.infrastructure.mapper.ClassGroupStudentMapper;
 import com.example.training.course.infrastructure.persistence.ClassGroupEntity;
 import com.example.training.course.infrastructure.persistence.ClassGroupMapper;
 import com.example.training.course.infrastructure.persistence.CourseEntity;
@@ -11,6 +12,7 @@ import com.example.training.course.infrastructure.persistence.CourseMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -21,6 +23,7 @@ public class CourseRepositoryImpl implements CourseRepository {
     
     private final CourseMapper courseMapper;
     private final ClassGroupMapper classGroupMapper;
+    private final ClassGroupStudentMapper classGroupStudentMapper;
     
     @Override
     public Course save(Course course) {
@@ -192,14 +195,46 @@ public class CourseRepositoryImpl implements CourseRepository {
     }
     
     @Override
-    public void addStudentsToClassGroup(Long classGroupId, List<Long> studentIds) {
-        // 实际实现需要操作class_group_student关联表
-        // 这里简化处理，实际项目中需要调用对应的Mapper
+    public void addStudentsToClassGroup(Long classGroupId, List<Long> studentIds, Long createdBy) {
+        if (studentIds == null || studentIds.isEmpty()) {
+            return;
+        }
+        classGroupStudentMapper.batchInsert(
+                classGroupId,
+                studentIds,
+                LocalDateTime.now(),
+                "ACTIVE",
+                createdBy != null ? createdBy : 0L
+        );
     }
     
     @Override
     public void removeStudentsFromClassGroup(Long classGroupId, List<Long> studentIds) {
-        // 实际实现需要操作class_group_student关联表
-        // 这里简化处理，实际项目中需要调用对应的Mapper
+        if (studentIds == null || studentIds.isEmpty()) {
+            return;
+        }
+        classGroupStudentMapper.batchUpdateStatus(
+                classGroupId,
+                studentIds,
+                "LEFT",
+                LocalDateTime.now()
+        );
+    }
+
+    @Override
+    public List<Long> findStudentIdsByClassGroupId(Long classGroupId) {
+        if (classGroupId == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<com.example.training.course.infrastructure.persistence.ClassGroupStudentEntity> entities =
+                classGroupStudentMapper.selectList(
+                        new LambdaQueryWrapper<com.example.training.course.infrastructure.persistence.ClassGroupStudentEntity>()
+                                .eq(com.example.training.course.infrastructure.persistence.ClassGroupStudentEntity::getClassGroupId, classGroupId)
+                                .eq(com.example.training.course.infrastructure.persistence.ClassGroupStudentEntity::getStatus, "ACTIVE")
+                );
+        return entities.stream()
+                .map(com.example.training.course.infrastructure.persistence.ClassGroupStudentEntity::getStudentId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
     }
 }

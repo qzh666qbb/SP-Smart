@@ -3,8 +3,11 @@ package com.example.training.schedule.controller;
 import com.example.training.common.exception.BusinessException;
 import com.example.training.common.exception.ErrorCode;
 import com.example.training.common.response.ApiResponse;
+import com.example.training.common.response.PageRequest;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
 import com.example.training.common.security.ParentPermissionService;
+import com.example.training.common.security.TeacherPermissionService;
 import com.example.training.schedule.application.dto.AttendanceRequest;
 import com.example.training.schedule.application.dto.ScheduleCreateRequest;
 import com.example.training.schedule.application.service.ScheduleApplicationService;
@@ -32,6 +35,7 @@ public class ScheduleController {
     private final ScheduleApplicationService scheduleApplicationService;
     private final ScheduleCompletionService scheduleCompletionService;
     private final ParentPermissionService parentPermissionService;
+    private final TeacherPermissionService teacherPermissionService;
     
     @PostMapping("/business/schedules")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
@@ -44,8 +48,13 @@ public class ScheduleController {
     
     @GetMapping("/business/schedules")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<List<ScheduleSeries>> listSchedules(@AuthenticationPrincipal CurrentUser currentUser) {
-        List<ScheduleSeries> response = scheduleApplicationService.listSchedules(currentUser.getProfileId());
+    public ApiResponse<PageResult<ScheduleSeries>> listSchedules(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            PageRequest pageRequest,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        Long teacherId = "ADMIN".equals(currentUser.getRole()) ? null : currentUser.getProfileId();
+        PageResult<ScheduleSeries> response = scheduleApplicationService.listSchedulesPage(
+                teacherId, keyword, pageRequest.getPageNum(), pageRequest.getPageSize());
         return ApiResponse.success(response);
     }
     
@@ -61,6 +70,16 @@ public class ScheduleController {
     public ApiResponse<Void> deleteSchedule(@PathVariable Long id) {
         scheduleApplicationService.deleteSchedule(id);
         return ApiResponse.success();
+    }
+
+    @PutMapping("/business/schedules/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ApiResponse<ScheduleSeries> updateSchedule(
+            @PathVariable Long id,
+            @Valid @RequestBody ScheduleCreateRequest request,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        ScheduleSeries response = scheduleApplicationService.updateSchedule(id, request, currentUser);
+        return ApiResponse.success(response);
     }
     
     @PostMapping("/business/lessons/{lessonId}/start")
@@ -112,9 +131,11 @@ public class ScheduleController {
     @GetMapping("/business/lessons")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ApiResponse<List<Lesson>> getLessonsByTeacher(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @AuthenticationPrincipal CurrentUser currentUser) {
-        List<Lesson> response = scheduleApplicationService.getLessonsByTeacher(currentUser.getProfileId(), date);
+        LocalDate d = date != null ? date : LocalDate.now();
+        Long teacherId = "ADMIN".equals(currentUser.getRole()) ? null : currentUser.getProfileId();
+        List<Lesson> response = scheduleApplicationService.getLessonsByTeacher(teacherId, d);
         return ApiResponse.success(response);
     }
     
@@ -126,12 +147,19 @@ public class ScheduleController {
     }
     
     @GetMapping("/parent/schedules")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT', 'TEACHER')")
     public ApiResponse<List<Lesson>> getChildSchedules(
             @RequestParam Long studentId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("PARENT".equals(currentUser.getRole())
+                && !parentPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员排课信息");
+        } else if ("TEACHER".equals(currentUser.getRole())
+                && !teacherPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员排课信息");
+        }
         List<Lesson> response = scheduleApplicationService.getChildSchedules(studentId, startDate, endDate, currentUser);
         return ApiResponse.success(response);
     }

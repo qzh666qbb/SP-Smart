@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,4 +18,7 @@ public class BindRequest {
     
     @Pattern(regexp = "^(FATHER|MOTHER|GUARDIAN|OTHER)$", message = "关系类型必须是FATHER、MOTHER、GUARDIAN或OTHER")
     private String relationType;
+
+    public Long getStudentId() { return studentId; }    public void setStudentId(Long studentId) { this.studentId = studentId; }
+    public String getRelationType() { return relationType; }    public void setRelationType(String relationType) { this.relationType = relationType; }
 }

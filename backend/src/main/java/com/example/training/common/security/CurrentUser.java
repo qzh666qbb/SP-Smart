@@ -31,4 +31,21 @@ public class CurrentUser {
     public boolean isParent() {
         return "PARENT".equals(role);
     }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    public String getWechatOpenid() { return wechatOpenid; }
+    public void setWechatOpenid(String wechatOpenid) { this.wechatOpenid = wechatOpenid; }
+    public String getWechatUnionid() { return wechatUnionid; }
+    public void setWechatUnionid(String wechatUnionid) { this.wechatUnionid = wechatUnionid; }
+    public Long getProfileId() { return profileId; }
+    public void setProfileId(Long profileId) { this.profileId = profileId; }
+    public String getProfileType() { return profileType; }
+    public void setProfileType(String profileType) { this.profileType = profileType; }
 }

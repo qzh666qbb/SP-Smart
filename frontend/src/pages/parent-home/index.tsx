@@ -7,6 +7,7 @@ import { Lesson, ParentProfile, Student } from '@/types';
 import { getLessons, getParentStudents } from '@/services/api';
 import { formatDate } from '@/utils/format';
 import useAuthStore from '@/store/auth';
+import { notifyTabBarActive } from '@/utils/tabbar';
 import styles from './index.module.scss';
 
 interface CalendarDay {
@@ -19,6 +20,7 @@ interface CalendarDay {
 }
 
 export default function ParentHomePage() {
+  Taro.useDidShow(() => notifyTabBarActive('/pages/parent-home/index'));
   const [schedules, setSchedules] = useState<Lesson[]>([]);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [currentMonth, setCurrentMonth] = useState(new Date());

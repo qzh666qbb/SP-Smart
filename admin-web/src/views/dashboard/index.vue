@@ -149,7 +149,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getUsers, getStudents, getCourses, getLessons, getPhysicalTests } from '@/api'
+import { getUsers, getStudents, getCourses, getLessons, getPhysicalTests, readList } from '@/api'
 
 const router = useRouter()
 
@@ -212,25 +212,30 @@ const goToPhysical = () => {
 const fetchStats = async () => {
   try {
     const users = await getUsers()
-    stats.users = users.length || 0
+    const userArr = readList(users)
+    stats.users = userArr.length || 0
 
     const students = await getStudents()
-    stats.students = students.length || 0
+    const stuArr = readList(students)
+    stats.students = stuArr.length || 0
 
     const courses = await getCourses()
-    stats.courses = courses.length || 0
+    const courseArr = readList(courses)
+    stats.courses = courseArr.length || 0
 
     const today = new Date().toISOString().split('T')[0]
     const lessons = await getLessons({ date: today })
-    stats.schedules = lessons.length || 0
-    todayLessons.value = lessons.slice(0, 5).map(l => ({
+    const lessonArr = readList(lessons)
+    stats.schedules = lessonArr.length || 0
+    todayLessons.value = lessonArr.slice(0, 5).map(l => ({
       ...l,
       courseName: l.courseName || '体育课',
       teacherName: l.teacherName || '张老师'
     }))
 
     const physical = await getPhysicalTests()
-    recentPhysical.value = physical.slice(0, 5).map(p => ({
+    const phyArr = readList(physical)
+    recentPhysical.value = phyArr.slice(0, 5).map(p => ({
       ...p,
       studentName: p.studentName || '--',
       teacherName: p.teacherName || '--'

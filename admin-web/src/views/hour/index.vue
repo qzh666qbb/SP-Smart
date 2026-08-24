@@ -64,11 +64,11 @@
             <el-option v-for="student in students" :key="student.id" :label="student.name" :value="student.id" />
           </el-select>
         </el-form-item>
-        <el-form-item prop="hours" label="充值课时">
-          <el-input-number v-model="form.hours" :min="1" :max="1000" placeholder="请输入充值课时" />
+        <el-form-item prop="amount" label="充值课时">
+          <el-input-number v-model="form.amount" :min="1" :max="1000" placeholder="请输入充值课时" />
         </el-form-item>
-        <el-form-item prop="remark" label="备注">
-          <el-input v-model="form.remark" type="textarea" placeholder="请输入备注" :rows="2" />
+        <el-form-item prop="reason" label="备注">
+          <el-input v-model="form.reason" type="textarea" placeholder="请输入备注" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -104,6 +104,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getHourAccounts, rechargeHours, getHourTransactions, getStudents } from '@/api'
 
 const tableData = ref([])
@@ -117,13 +118,13 @@ const formRef = ref(null)
 
 const form = reactive({
   studentId: '',
-  hours: 0,
-  remark: ''
+  amount: 1,
+  reason: ''
 })
 
 const rules = {
   studentId: [{ required: true, message: '请选择学员', trigger: 'change' }],
-  hours: [{ required: true, message: '请输入充值课时', trigger: 'blur' }]
+  amount: [{ required: true, message: '请输入充值课时', trigger: 'blur' }]
 }
 
 const tableRowClassName = ({ rowIndex }) => {
@@ -135,20 +136,23 @@ const tableRowClassName = ({ rowIndex }) => {
 
 const fetchData = async () => {
   try {
-    const res = await getHourAccounts({ ...searchForm, ...pagination })
-    tableData.value = res.list || res
-    pagination.total = res.total || tableData.value.length
+    const res = await getHourAccounts({ keyword: searchForm.keyword, pageNum: pagination.page, pageSize: pagination.size })
+    tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
-    console.error(err)
+    console.error('[fetchData]', err)
+    tableData.value = []
+    pagination.total = 0
   }
 }
 
 const fetchStudents = async () => {
   try {
     const res = await getStudents()
-    students.value = res.list || res
+    students.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
   } catch (err) {
-    console.error(err)
+    console.error('[fetchStudents]', err)
+    students.value = []
   }
 }
 
@@ -175,16 +179,21 @@ const handleCurrentChange = (page) => {
 
 const handleViewTransactions = async (row) => {
   try {
-    const res = await getHourTransactions({ studentId: row.studentId })
-    transactions.value = res.list || res
+    const sid = row.studentId != null ? String(row.studentId) : String(row.id)
+    const res = await getHourTransactions(sid)
+    transactions.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
     showTransactionsModal.value = true
   } catch (err) {
-    console.error(err)
+    console.error('[handleViewTransactions]', err)
+    transactions.value = []
+    ElMessage.error(err?.message || '加载课时记录失败')
   }
 }
 
 const handleRecharge = (row) => {
-  form.studentId = row.studentId
+  form.studentId = row.studentId != null ? row.studentId : row.id
+  form.amount = 1
+  form.reason = ''
   showRechargeModal.value = true
 }
 
@@ -193,12 +202,18 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     try {
-      await rechargeHours(form)
-      alert('充值成功')
+      const payload = {
+        studentId: typeof form.studentId === 'string' ? Number(form.studentId) : form.studentId,
+        amount: Number(form.amount),
+        reason: form.reason,
+        hourSource: 'PAID'
+      }
+      await rechargeHours(payload)
+      ElMessage.success('充值成功')
       showRechargeModal.value = false
       fetchData()
     } catch (err) {
-      alert('操作失败')
+      ElMessage.error(err?.message || '操作失败')
     }
   })
 }

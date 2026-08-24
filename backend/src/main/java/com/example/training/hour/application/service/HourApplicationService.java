@@ -2,20 +2,26 @@ package com.example.training.hour.application.service;
 
 import com.example.training.common.exception.BusinessException;
 import com.example.training.common.exception.ErrorCode;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
+import com.example.training.hour.application.dto.HourAccountResponse;
 import com.example.training.hour.application.dto.HourRechargeRequest;
 import com.example.training.hour.application.dto.HourRefundRequest;
 import com.example.training.hour.domain.model.HourTransaction;
 import com.example.training.hour.domain.model.StudentHourAccount;
 import com.example.training.hour.domain.repository.HourRepository;
+import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,6 +30,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class HourApplicationService {
+    private static final Logger log = LoggerFactory.getLogger(HourApplicationService.class);
+
     
     private final HourRepository hourRepository;
     
@@ -94,7 +102,6 @@ public class HourApplicationService {
 
         account.setTotalRecharged(safe(account.getTotalRecharged()).add(amount));
         account.setRemainingHours(calcRemaining(account));
-        account.setVersion(account.getVersion() == null ? 1 : account.getVersion() + 1);
 
         BigDecimal afterBalance = safe(account.getRemainingHours());
 
@@ -122,7 +129,7 @@ public class HourApplicationService {
     }
     
     @Transactional
-    public StudentHourAccount consume(Long studentId, BigDecimal amount, Long lessonId, Long lessonStudentId, 
+    public HourTransaction consume(Long studentId, BigDecimal amount, Long lessonId, Long lessonStudentId, 
                                        String reason, CurrentUser currentUser) {
         StudentHourAccount account = hourRepository.findAccountByStudentId(studentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND, "学员没有课时账户"));
@@ -172,10 +179,15 @@ public class HourApplicationService {
         
         account.setTotalConsumed(safe(account.getTotalConsumed()).add(amount));
         account.setRemainingHours(calcRemaining(account));
-        account.setVersion(account.getVersion() == null ? 1 : account.getVersion() + 1);
         
         BigDecimal afterBalance = safe(account.getRemainingHours());
-        StudentHourAccount savedAccount = hourRepository.saveAccount(account);
+        
+        try {
+            hourRepository.saveAccount(account);
+        } catch (MybatisPlusException e) {
+            log.warn("课时账户乐观锁冲突: studentId={}, version={}", studentId, account.getVersion());
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "课时账户并发操作冲突，请重试");
+        }
         
         String primarySource = sourcesUsed.isEmpty() ? "PAID" : sourcesUsed.get(0);
         HourTransaction transaction = HourTransaction.builder()
@@ -193,10 +205,10 @@ public class HourApplicationService {
                 .hourSource(primarySource)
                 .build();
         
-        hourRepository.saveTransaction(transaction);
+        HourTransaction savedTransaction = hourRepository.saveTransaction(transaction);
         log.info("课时消耗: studentId={}, amount={}, lessonId={}, sources={}", studentId, amount, lessonId, sourcesUsed);
         
-        return savedAccount;
+        return savedTransaction;
     }
     
     @Transactional
@@ -214,7 +226,6 @@ public class HourApplicationService {
         account.setTotalRefunded(safe(account.getTotalRefunded()).add(request.getAmount()));
         account.setPaidHours(safe(account.getPaidHours()).subtract(request.getAmount()));
         account.setRemainingHours(calcRemaining(account));
-        account.setVersion(account.getVersion() == null ? 1 : account.getVersion() + 1);
         
         afterBalance = safe(account.getRemainingHours());
         StudentHourAccount savedAccount = hourRepository.saveAccount(account);
@@ -247,6 +258,36 @@ public class HourApplicationService {
         return hourRepository.findTransactionsByStudentId(studentId);
     }
 
+    public PageResult<HourAccountResponse> listAccounts(String keyword, int pageNum, int pageSize) {
+        int pn = Math.max(1, pageNum);
+        int ps = Math.min(500, Math.max(1, pageSize));
+        long total = hourRepository.countAccounts(keyword);
+        List<Object[]> rows = hourRepository.listAccountsRaw(keyword, (pn - 1) * ps, ps);
+        List<HourAccountResponse> list = new ArrayList<>(rows.size());
+        for (Object[] r : rows) {
+            Long id = (Long) r[0];
+            Long studentId = (Long) r[1];
+            if (studentId == null) {
+                continue;
+            }
+            HourAccountResponse.HourAccountResponseBuilder b = HourAccountResponse.builder()
+                    .id(id != null ? id : studentId)
+                    .studentId(studentId)
+                    .studentName((String) r[2])
+                    .studentNo((String) r[3])
+                    .parentName((String) r[4])
+                    .parentPhone((String) r[5])
+                    .totalHours((BigDecimal) r[6])
+                    .usedHours((BigDecimal) r[7])
+                    .remainingHours((BigDecimal) r[8])
+                    .paidHours((BigDecimal) r[9])
+                    .giftHours((BigDecimal) r[10])
+                    .createTime((LocalDateTime) r[11]);
+            list.add(b.build());
+        }
+        return PageResult.of(list, total, pn, ps);
+    }
+
     @Transactional
     public StudentHourAccount refundByTransaction(Long transactionId, String reason, CurrentUser currentUser) {
         HourTransaction originalTransaction = hourRepository.findTransactionById(transactionId)
@@ -276,11 +317,16 @@ public class HourApplicationService {
 
         account.setTotalRefunded(safe(account.getTotalRefunded()).add(refundAmount));
         account.setRemainingHours(calcRemaining(account));
-        account.setVersion(account.getVersion() == null ? 1 : account.getVersion() + 1);
 
         BigDecimal afterBalance = safe(account.getRemainingHours());
-        StudentHourAccount savedAccount = hourRepository.saveAccount(account);
-
+        
+        try {
+            hourRepository.saveAccount(account);
+        } catch (MybatisPlusException e) {
+            log.warn("课时退款乐观锁冲突: transactionId={}, studentId={}", transactionId, originalTransaction.getStudentId());
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "课时账户并发操作冲突，请重试");
+        }
+        
         HourTransaction refundTransaction = HourTransaction.builder()
                 .transactionNo("TRF" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .studentId(originalTransaction.getStudentId())
@@ -297,14 +343,14 @@ public class HourApplicationService {
                 .hourSource(source)
                 .build();
 
-        hourRepository.saveTransaction(refundTransaction);
+        HourTransaction savedRefundTransaction = hourRepository.saveTransaction(refundTransaction);
 
-        originalTransaction.setRelatedTransactionId(refundTransaction.getId());
+        originalTransaction.setRelatedTransactionId(savedRefundTransaction.getId());
         hourRepository.saveTransaction(originalTransaction);
 
         log.info("课时退回: transactionId={}, studentId={}, amount={}, source={}", transactionId,
                 originalTransaction.getStudentId(), refundAmount, source);
 
-        return savedAccount;
+        return hourRepository.findAccountByStudentId(originalTransaction.getStudentId()).orElse(null);
     }
 }

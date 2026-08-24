@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -33,4 +32,11 @@ public class CourseCreateRequest {
     private BigDecimal defaultConsumeHours;
     
     private String description;
+
+    public String getCourseCode() { return courseCode; }    public void setCourseCode(String courseCode) { this.courseCode = courseCode; }
+    public String getCourseName() { return courseName; }    public void setCourseName(String courseName) { this.courseName = courseName; }
+    public String getCourseType() { return courseType; }    public void setCourseType(String courseType) { this.courseType = courseType; }
+    public Integer getDefaultDurationMinutes() { return defaultDurationMinutes; }    public void setDefaultDurationMinutes(Integer defaultDurationMinutes) { this.defaultDurationMinutes = defaultDurationMinutes; }
+    public BigDecimal getDefaultConsumeHours() { return defaultConsumeHours; }    public void setDefaultConsumeHours(BigDecimal defaultConsumeHours) { this.defaultConsumeHours = defaultConsumeHours; }
+    public String getDescription() { return description; }    public void setDescription(String description) { this.description = description; }
 }

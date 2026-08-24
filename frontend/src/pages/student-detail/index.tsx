@@ -6,29 +6,12 @@ import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
 import { Student, PhysicalTestRecord, Lesson } from '@/types';
 import { formatDate, getLevelText } from '@/utils/format';
+import {
+  getStudentById,
+  getPhysicalTests,
+  getLessons,
+} from '@/services/api';
 import styles from './index.module.scss';
-
-const mockStudent: Student = {
-  id: '1',
-  name: '张三',
-  age: 12,
-  gender: 'MALE',
-  studentNo: 'S001',
-  parentName: '张父',
-  parentPhone: '13800138001'
-};
-
-const mockRecords: PhysicalTestRecord[] = [
-  { id: '1', recordNo: 'R001', studentId: '1', testerId: 'T001', testDate: '2024-01-15', totalScore: 85, overallLevel: 'EXCELLENT', status: 'CONFIRMED' },
-  { id: '2', recordNo: 'R002', studentId: '1', testerId: 'T001', testDate: '2024-03-20', totalScore: 78, overallLevel: 'GOOD', status: 'CONFIRMED' },
-  { id: '3', recordNo: 'R003', studentId: '1', testerId: 'T001', testDate: '2024-06-10', totalScore: 92, overallLevel: 'EXCELLENT', status: 'CONFIRMED' },
-];
-
-const mockCourses: Lesson[] = [
-  { id: '1', lessonNo: 'L001', courseId: 'C001', classGroupId: 'G001', teacherId: 'T001', lessonDate: '2024-07-22', startTime: '08:00', endTime: '09:30', status: 'COMPLETED' },
-  { id: '2', lessonNo: 'L002', courseId: 'C001', classGroupId: 'G001', teacherId: 'T001', lessonDate: '2024-07-20', startTime: '14:00', endTime: '15:30', status: 'COMPLETED' },
-  { id: '3', lessonNo: 'L003', courseId: 'C001', classGroupId: 'G001', teacherId: 'T001', lessonDate: '2024-07-18', startTime: '08:00', endTime: '09:30', status: 'COMPLETED' },
-];
 
 export default function StudentDetailPage() {
   const [student, setStudent] = useState<Student | null>(null);
@@ -36,18 +19,36 @@ export default function StudentDetailPage() {
   const [courses, setCourses] = useState<Lesson[]>([]);
   const [activeTab, setActiveTab] = useState<'physical' | 'courses'>('physical');
   const [selectedRecord, setSelectedRecord] = useState<PhysicalTestRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [studentId, setStudentId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
+    const opts = Taro.getCurrentInstance()?.router?.params;
+    const sid = String(opts?.studentId || opts?.id || '');
+    if (!sid) {
+      Taro.showToast({ title: '缺少学员ID', icon: 'none' });
+      return;
+    }
+    setStudentId(sid);
+    fetchData(sid);
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (sid: string) => {
+    setIsLoading(true);
     try {
-      setStudent(mockStudent);
-      setRecords(mockRecords);
-      setCourses(mockCourses);
+      const [stu, recs, lsns] = await Promise.all([
+        getStudentById(sid).catch(() => null as any),
+        getPhysicalTests({ studentId: sid }).catch(() => [] as any),
+        getLessons({ studentId: sid }).catch(() => [] as any),
+      ]);
+      if (stu) setStudent(stu);
+      setRecords(recs || []);
+      setCourses(lsns || []);
     } catch (err) {
-      console.error('[StudentDetailPage]', err);
+      console.error('[StudentDetailPage.fetchData]', err);
+      Taro.showToast({ title: '数据加载失败', icon: 'none' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -80,10 +81,18 @@ export default function StudentDetailPage() {
     }
   };
 
-  if (!student) {
+  if (!student && isLoading) {
     return (
       <View className={styles.container}>
         <Text>加载中...</Text>
+      </View>
+    );
+  }
+
+  if (!student) {
+    return (
+      <View className={styles.container}>
+        <Text>找不到该学员</Text>
       </View>
     );
   }
@@ -106,7 +115,7 @@ export default function StudentDetailPage() {
         </View>
         <View className={styles.infoRow}>
           <Text className={styles.infoLabel}>学号</Text>
-          <Text className={styles.infoValue}>{student.studentNo}</Text>
+          <Text className={styles.infoValue}>{student.studentNo || ('ID: ' + student.id)}</Text>
         </View>
         <View className={styles.infoRow}>
           <Text className={styles.infoLabel}>家长</Text>
@@ -119,17 +128,17 @@ export default function StudentDetailPage() {
       </Card>
 
       <View className={styles.tabHeader}>
-        <View 
+        <View
           className={`${styles.tabItem} ${activeTab === 'physical' ? styles.active : ''}`}
           onClick={() => setActiveTab('physical')}
         >
-          <Text className={styles.tabText}>体测记录</Text>
+          <Text className={styles.tabText}>体测记录（共{records.length}）</Text>
         </View>
-        <View 
+        <View
           className={`${styles.tabItem} ${activeTab === 'courses' ? styles.active : ''}`}
           onClick={() => setActiveTab('courses')}
         >
-          <Text className={styles.tabText}>课程记录</Text>
+          <Text className={styles.tabText}>课程记录（共{courses.length}）</Text>
         </View>
       </View>
 
@@ -140,20 +149,23 @@ export default function StudentDetailPage() {
               <Text className={styles.emptyText}>暂无体测记录</Text>
             </Card>
           ) : (
-            records.map(record => (
-              <Card key={record.id} className={styles.recordCard} onClick={() => handleRecordClick(record)}>
-                <View className={styles.recordHeader}>
-                  <View className={styles.recordInfo}>
-                    <Text className={styles.recordNo}>{record.recordNo}</Text>
-                    <Text className={styles.recordDate}>{formatDate(record.testDate)}</Text>
+            records.map(record => {
+              const level = (record as any).overallLevel || (record as any).scoreLevel;
+              return (
+                <Card key={record.id} className={styles.recordCard} onClick={() => handleRecordClick(record)}>
+                  <View className={styles.recordHeader}>
+                    <View className={styles.recordInfo}>
+                      <Text className={styles.recordNo}>{record.recordNo || `R-${record.id}`}</Text>
+                      <Text className={styles.recordDate}>{formatDate(record.testDate)}</Text>
+                    </View>
+                    <View className={styles.recordScore}>
+                      <Text className={styles.score}>{record.totalScore ?? '-'}</Text>
+                      {level ? getLevelTag(level) : null}
+                    </View>
                   </View>
-                  <View className={styles.recordScore}>
-                    <Text className={styles.score}>{record.totalScore}</Text>
-                    {getLevelTag(record.overallLevel)}
-                  </View>
-                </View>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           )}
         </View>
       )}
@@ -175,7 +187,7 @@ export default function StudentDetailPage() {
                   {getStatusTag(course.status)}
                 </View>
                 <View className={styles.courseFooter}>
-                  <Text className={styles.courseNo}>课程编号: {course.lessonNo}</Text>
+                  <Text className={styles.courseNo}>课程编号: {course.lessonNo || `ID:${course.id}`}</Text>
                 </View>
               </Card>
             ))
@@ -194,7 +206,7 @@ export default function StudentDetailPage() {
               <View className={styles.reportInfo}>
                 <View className={styles.reportRow}>
                   <Text className={styles.reportLabel}>报告编号</Text>
-                  <Text className={styles.reportValue}>{selectedRecord.recordNo}</Text>
+                  <Text className={styles.reportValue}>{selectedRecord.recordNo || `R-${selectedRecord.id}`}</Text>
                 </View>
                 <View className={styles.reportRow}>
                   <Text className={styles.reportLabel}>测试日期</Text>
@@ -202,41 +214,26 @@ export default function StudentDetailPage() {
                 </View>
                 <View className={styles.reportRow}>
                   <Text className={styles.reportLabel}>总分</Text>
-                  <Text className={styles.reportValue}>{selectedRecord.totalScore}分</Text>
+                  <Text className={styles.reportValue}>{selectedRecord.totalScore ?? '-'}分</Text>
                 </View>
                 <View className={styles.reportRow}>
                   <Text className={styles.reportLabel}>评级</Text>
-                  <Text className={styles.reportValue}>{getLevelText(selectedRecord.overallLevel)}</Text>
+                  <Text className={styles.reportValue}>
+                    {getLevelText((selectedRecord as any).overallLevel || (selectedRecord as any).scoreLevel)}
+                  </Text>
                 </View>
                 <View className={styles.scoreSection}>
                   <Text className={styles.sectionTitle}>测试项目</Text>
-                  <View className={styles.scoreItems}>
-                    <View className={styles.scoreItem}>
-                      <Text className={styles.scoreName}>身高</Text>
-                      <Text className={styles.scoreValue}>156cm</Text>
-                      <Text className={styles.scoreLevel}>优秀</Text>
+                  {((selectedRecord as any).scores || (selectedRecord as any).details || []).map((s: any, idx: number) => (
+                    <View key={idx} className={styles.scoreItem}>
+                      <Text className={styles.scoreName}>{s.itemName || s.name || '项目' + (idx + 1)}</Text>
+                      <Text className={styles.scoreValue}>{s.rawValue ?? s.value ?? '-'}{s.unit || ''}</Text>
+                      {(s.level || s.convertedLevel) && <Tag type="info">{s.level || s.convertedLevel}</Tag>}
                     </View>
-                    <View className={styles.scoreItem}>
-                      <Text className={styles.scoreName}>体重</Text>
-                      <Text className={styles.scoreValue}>45kg</Text>
-                      <Text className={styles.scoreLevel}>良好</Text>
-                    </View>
-                    <View className={styles.scoreItem}>
-                      <Text className={styles.scoreName}>50米跑</Text>
-                      <Text className={styles.scoreValue}>8.2秒</Text>
-                      <Text className={styles.scoreLevel}>优秀</Text>
-                    </View>
-                    <View className={styles.scoreItem}>
-                      <Text className={styles.scoreName}>立定跳远</Text>
-                      <Text className={styles.scoreValue}>185cm</Text>
-                      <Text className={styles.scoreLevel}>良好</Text>
-                    </View>
-                    <View className={styles.scoreItem}>
-                      <Text className={styles.scoreName}>肺活量</Text>
-                      <Text className={styles.scoreValue}>3200ml</Text>
-                      <Text className={styles.scoreLevel}>及格</Text>
-                    </View>
-                  </View>
+                  ))}
+                  {(((selectedRecord as any).scores || (selectedRecord as any).details || []).length === 0) && (
+                    <Text className={styles.infoValue}>暂无分项详情</Text>
+                  )}
                 </View>
               </View>
             </View>

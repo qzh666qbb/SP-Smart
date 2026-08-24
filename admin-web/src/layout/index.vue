@@ -5,7 +5,7 @@
         <div class="logo-icon-wrapper">
           <el-icon size="28"><el-icon-s-home /></el-icon>
         </div>
-        <span class="logo-text">体测管理系统</span>
+        <span class="logo-text">管理系统</span>
       </div>
       <el-menu :default-active="activeMenu" class="menu" mode="vertical" @select="handleMenuSelect">
         <el-menu-item index="/dashboard">
@@ -35,6 +35,14 @@
         <el-menu-item index="/hours">
           <el-icon><el-icon-clock /></el-icon>
           <span>课时管理</span>
+        </el-menu-item>
+        <el-menu-item index="/teacher/pre-register">
+          <el-icon><UserFilled /></el-icon>
+          <span>教师预登记</span>
+        </el-menu-item>
+        <el-menu-item index="/teacher/apply-review">
+          <el-icon><CircleCheckFilled /></el-icon>
+          <span>教师申请审核</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -90,7 +98,9 @@ const currentTitle = computed(() => {
     '/courses': '课程管理',
     '/schedules': '排课管理',
     '/physical': '体测管理',
-    '/hours': '课时管理'
+    '/hours': '课时管理',
+    '/teacher/pre-register': '教师预登记',
+    '/teacher/apply-review': '教师申请审核'
   }
   return titleMap[route.path] || ''
 })

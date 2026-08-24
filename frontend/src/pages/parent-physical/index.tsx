@@ -6,9 +6,11 @@ import { PhysicalTestRecord, ParentProfile, Student } from '@/types';
 import { getPhysicalTests, getParentStudents } from '@/services/api';
 import { formatDate } from '@/utils/format';
 import useAuthStore from '@/store/auth';
+import { notifyTabBarActive } from '@/utils/tabbar';
 import styles from './index.module.scss';
 
 export default function ParentPhysicalPage() {
+  Taro.useDidShow(() => notifyTabBarActive('/pages/parent-physical/index'));
   const [records, setRecords] = useState<PhysicalTestRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showReportModal, setShowReportModal] = useState(false);

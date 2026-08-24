@@ -5,7 +5,7 @@
         <h2>体测管理</h2>
         <p class="page-desc">管理学员体测记录，包括测试数据和评估结果</p>
       </div>
-      <el-button type="primary" class="btn-primary" @click="showAddModal = true">
+      <el-button type="primary" class="btn-primary" @click="handleAdd">
         <el-icon><el-icon-plus /></el-icon>
         新增体测记录
       </el-button>
@@ -36,8 +36,8 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button type="primary" size="small" class="btn-view" @click="handleView(row)">查看报告</el-button>
-              <el-button type="warning" size="small" class="btn-edit" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger" size="small" class="btn-delete" @click="handleDelete(row)">删除</el-button>
+              <el-button type="primary" size="small" class="btn-edit" @click="handleEdit(row)">编辑</el-button>
+              <el-button type="danger" size="small" class="btn-delete" @click.stop="handleDelete(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -57,24 +57,46 @@
       </div>
     </div>
 
-    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑体测记录' : '新增体测记录'" width="520px" class="custom-dialog">
-      <el-form :model="form" :rules="rules" ref="formRef" class="modal-form">
+    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑体测记录' : '新增体测记录'" width="640px" class="custom-dialog">
+      <el-form :model="form" :rules="rules" ref="formRef" class="modal-form" label-width="110px">
+        <el-form-item prop="batchId" label="体测批次">
+          <el-select v-model="form.batchId" placeholder="请选择批次" style="width: 100%">
+            <el-option label="默认批次 (1)" :value="1" />
+            <el-option label="批次 2" :value="2" />
+            <el-option label="批次 3" :value="3" />
+          </el-select>
+        </el-form-item>
         <el-form-item prop="studentId" label="学员">
-          <el-select v-model="form.studentId" placeholder="请选择学员">
-            <el-option v-for="student in students" :key="student.id" :label="student.name" :value="student.id" />
+          <el-select v-model="form.studentId" placeholder="请选择学员" filterable style="width: 100%">
+            <el-option v-for="s in students" :key="s.id" :label="`${s.name || s.studentName} (${s.studentNo || s.parentPhone || s.id})`" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item prop="testDate" label="测试日期">
-          <el-date-picker v-model="form.testDate" type="date" placeholder="请选择测试日期" />
+          <el-date-picker v-model="form.testDate" type="date" placeholder="请选择测试日期" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
-        <el-form-item prop="teacherName" label="测试老师">
-          <el-input v-model="form.teacherName" placeholder="请输入测试老师" />
-        </el-form-item>
-        <el-form-item prop="totalScore" label="总分">
-          <el-input-number v-model="form.totalScore" :min="0" :max="100" placeholder="请输入总分" />
-        </el-form-item>
-        <el-form-item prop="evaluation" label="评估结果">
-          <el-input v-model="form.evaluation" type="textarea" placeholder="请输入评估结果" :rows="3" />
+        <el-divider content-position="left">成绩录入</el-divider>
+        <div v-for="(score, idx) in form.scores" :key="idx" class="score-row">
+          <div class="score-label" style="width: 130px; margin-right: 12px">
+            <span class="score-name">{{ score.itemName || `指标 ${idx + 1}` }}</span>
+            <span v-if="score.unit" class="score-unit">（{{ score.unit }}）</span>
+          </div>
+          <el-form-item :prop="`scores.${idx}.rawValue`" label="原始值" label-width="80px" style="flex: 1; margin-right: 12px">
+            <el-input-number v-model="score.rawValue" :min="0" :max="9999" :step="0.01" :precision="2" style="width: 100%" />
+          </el-form-item>
+          <el-form-item :prop="`scores.${idx}.convertedScore`" label="得分" label-width="60px" style="flex: 1; margin-right: 12px">
+            <el-input-number v-model="score.convertedScore" :min="0" :max="100" :step="0.5" :precision="1" style="width: 100%" />
+          </el-form-item>
+          <el-form-item :prop="`scores.${idx}.level`" label="等级" label-width="60px" style="flex: 1">
+            <el-select v-model="score.level" placeholder="等级" clearable style="width: 100%">
+              <el-option label="优秀" value="EXCELLENT" />
+              <el-option label="良好" value="GOOD" />
+              <el-option label="合格" value="PASS" />
+              <el-option label="不合格" value="FAIL" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <el-form-item prop="remark" label="评估备注">
+          <el-input v-model="form.remark" type="textarea" placeholder="评估备注 / 总体结论" :rows="3" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -130,10 +152,12 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { getPhysicalTests, createPhysicalTest, updatePhysicalTest, deletePhysicalTest, getStudents } from '@/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getPhysicalTests, createPhysicalTest, updatePhysicalTest, deletePhysicalTest, getStudents, getPhysicalItems } from '@/api'
 
 const tableData = ref([])
 const students = ref([])
+const physicalItems = ref([])
 const searchForm = reactive({ keyword: '', date: '' })
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showAddModal = ref(false)
@@ -142,68 +166,107 @@ const selectedRecord = ref(null)
 const isEdit = ref(false)
 const formRef = ref(null)
 
+const defaultScoreRow = () => ({
+  itemId: 0,
+  itemName: '',
+  itemCode: '',
+  unit: '',
+  rawValue: 0,
+  convertedScore: 0,
+  level: '',
+  remark: ''
+})
+
+const buildScoresFromItems = (items) => {
+  if (Array.isArray(items) && items.length > 0) {
+    return items.map(it => ({
+      itemId: it.id || it.itemId || 0,
+      itemName: it.itemName || it.name || '',
+      itemCode: it.itemCode || '',
+      unit: it.unit || '',
+      rawValue: 0,
+      convertedScore: 0,
+      level: '',
+      remark: ''
+    }))
+  }
+  return [
+    { ...defaultScoreRow(), itemName: '50米跑', unit: '秒', itemId: 1 },
+    { ...defaultScoreRow(), itemName: '立定跳远', unit: '厘米', itemId: 2 },
+    { ...defaultScoreRow(), itemName: '仰卧起坐', unit: '次/分钟', itemId: 3 }
+  ]
+}
+
 const form = reactive({
   id: '',
+  batchId: 1,
   studentId: '',
   testDate: '',
-  teacherName: '',
-  totalScore: 0,
-  evaluation: '',
-  scores: []
+  remark: '',
+  scores: buildScoresFromItems([])
 })
 
 const rules = {
+  batchId: [{ required: true, message: '请选择批次', trigger: 'change' }],
   studentId: [{ required: true, message: '请选择学员', trigger: 'change' }],
-  testDate: [{ required: true, message: '请选择测试日期', trigger: 'change' }],
-  totalScore: [{ required: true, message: '请输入总分', trigger: 'blur' }]
+  testDate: [{ required: true, message: '请选择测试日期', trigger: 'change' }]
 }
 
 const tableRowClassName = ({ rowIndex }) => {
-  if (rowIndex % 2 === 1) {
-    return 'row-stripe'
-  }
+  if (rowIndex % 2 === 1) return 'row-stripe'
   return ''
 }
 
 const fetchData = async () => {
   try {
     const res = await getPhysicalTests({ ...searchForm, ...pagination })
-    tableData.value = res.list || res
-    pagination.total = res.total || tableData.value.length
+    tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    tableData.value = []
+    pagination.total = 0
   }
 }
 
 const fetchStudents = async () => {
   try {
-    const res = await getStudents()
-    students.value = res.list || res
+    const res = await getStudents({ pageNum: 1, pageSize: 200 })
+    students.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
   } catch (err) {
     console.error(err)
+    students.value = []
   }
 }
 
-const handleSearch = () => {
-  pagination.page = 1
-  fetchData()
+const fetchPhysicalItems = async () => {
+  try {
+    const res = await getPhysicalItems()
+    physicalItems.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+  } catch (err) {
+    console.error(err)
+    physicalItems.value = []
+  }
 }
 
-const resetSearch = () => {
-  searchForm.keyword = ''
-  searchForm.date = ''
-  pagination.page = 1
-  fetchData()
+const handleSearch = () => { pagination.page = 1; fetchData() }
+const resetSearch = () => { searchForm.keyword = ''; searchForm.date = ''; pagination.page = 1; fetchData() }
+const handleSizeChange = (size) => { pagination.size = size; fetchData() }
+const handleCurrentChange = (page) => { pagination.page = page; fetchData() }
+
+const resetForm = () => {
+  form.id = ''
+  form.batchId = 1
+  form.studentId = ''
+  form.testDate = ''
+  form.remark = ''
+  form.scores = buildScoresFromItems(physicalItems.value)
 }
 
-const handleSizeChange = (size) => {
-  pagination.size = size
-  fetchData()
-}
-
-const handleCurrentChange = (page) => {
-  pagination.page = page
-  fetchData()
+const handleAdd = () => {
+  isEdit.value = false
+  resetForm()
+  showAddModal.value = true
 }
 
 const handleView = (row) => {
@@ -213,16 +276,29 @@ const handleView = (row) => {
 
 const handleEdit = (row) => {
   isEdit.value = true
-  Object.assign(form, row)
+  resetForm()
+  Object.assign(form, row || {})
+  if (form.scores && !Array.isArray(form.scores)) form.scores = []
+  if (!Array.isArray(form.scores) || form.scores.length === 0) {
+    form.scores = buildScoresFromItems(physicalItems.value)
+  }
   showAddModal.value = true
 }
 
-const handleDelete = (row) => {
-  if (!confirm(`确定删除体测记录 ?`)) return
-  deletePhysicalTest(row.id).then(() => {
-    alert('删除成功')
+const handleDelete = async (row) => {
+  const label = row?.studentName ? `学员 ${row.studentName} 的体测记录` : '该体测记录'
+  try {
+    await ElMessageBox.confirm(`确定删除${label}？删除后 8 项体测指标的评分明细将一并清除，无法恢复。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', distinguishCancelAndClose: true
+    })
+  } catch (_) { return }
+  try {
+    await deletePhysicalTest(row.id)
+    ElMessage.success('删除成功')
     fetchData()
-  }).catch(() => alert('删除失败'))
+  } catch (err) {
+    ElMessage.error(err?.message || '删除失败')
+  }
 }
 
 const handleSubmit = async () => {
@@ -230,25 +306,42 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     try {
+      const scores = (Array.isArray(form.scores) ? form.scores : [])
+        .filter(s => s && (Number(s.rawValue) > 0 || Number(s.convertedScore) > 0 || s.itemId > 0))
+        .map(s => ({
+          itemId: Number(s.itemId) || 0,
+          rawValue: Number(s.rawValue) || 0,
+          convertedScore: Number(s.convertedScore) || 0,
+          level: s.level || null,
+          remark: s.remark || null
+        }))
+      const payload = {
+        batchId: Number(form.batchId) || 1,
+        studentId: Number(form.studentId) || 0,
+        testDate: form.testDate,
+        scores,
+        remark: form.remark || null
+      }
       if (isEdit.value) {
-        await updatePhysicalTest(form.id, form)
-        alert('更新成功')
+        await updatePhysicalTest(form.id, payload)
+        ElMessage.success('更新成功')
       } else {
-        await createPhysicalTest(form)
-        alert('创建成功')
+        await createPhysicalTest(payload)
+        ElMessage.success('创建成功')
       }
       showAddModal.value = false
       fetchData()
     } catch (err) {
-      alert('操作失败')
+      ElMessage.error(err?.message || '操作失败')
     }
   })
 }
 
 const handleDownload = () => {
-  alert('报告下载中...')
+  ElMessage.info('报告下载中...')
 }
 
+fetchPhysicalItems()
 fetchData()
 fetchStudents()
 </script>

@@ -12,17 +12,17 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PageResult<T> {
-    
-    private List<T> records;
+
+    private List<T> list;
     private long total;
     private int pageNum;
     private int pageSize;
     private long pages;
-    
+
     public static <T> PageResult<T> of(List<T> records, long total, int pageNum, int pageSize) {
         long pages = (total + pageSize - 1) / pageSize;
         return PageResult.<T>builder()
-                .records(records)
+                .list(records)
                 .total(total)
                 .pageNum(pageNum)
                 .pageSize(pageSize)

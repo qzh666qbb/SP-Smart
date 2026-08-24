@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,4 +15,7 @@ public class WechatLoginRequest {
     private String openid;
     
     private String unionid;
+
+    public String getOpenid() { return openid; }    public void setOpenid(String openid) { this.openid = openid; }
+    public String getUnionid() { return unionid; }    public void setUnionid(String unionid) { this.unionid = unionid; }
 }

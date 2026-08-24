@@ -22,6 +22,16 @@ public enum ErrorCode {
     
     USER_NOT_FOUND(30001, "用户不存在"),
     USER_INVALID_PHONE(30002, "手机号格式不正确"),
+    USER_PHONE_ALREADY_EXISTS(30003, "手机号已注册"),
+    USER_WEAK_PASSWORD(30004, "密码过短，至少6位"),
+
+    TEACHER_APPLY_PENDING(30101, "教师申请正在审核中"),
+    TEACHER_APPLY_NOT_FOUND(30102, "教师申请不存在"),
+    TEACHER_PHONE_NOT_PRE_REGISTERED(30103, "该手机号未被管理端提前登记为教师，请先联系管理员"),
+
+    WECHAT_CODE_EXCHANGE_FAILED(30201, "微信登录临时凭证无效"),
+
+    CHILD_MAX_LIMIT(30301, "一个家长最多允许绑定 6 个孩子"),
     
     STUDENT_NOT_FOUND(40001, "学员不存在"),
     STUDENT_BIND_PENDING(40002, "绑定请求已存在"),

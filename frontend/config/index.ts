@@ -2,12 +2,15 @@ import { defineConfig, type UserConfigExport } from '@tarojs/cli';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import devConfig from './dev';
 import prodConfig from './prod';
-import vitePluginImp from 'vite-plugin-imp';
-// https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
-export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
+
+export default defineConfig<'webpack5'>(async (merge) => {
+  const DEFAULT_DEV_API = 'http://localhost:8080/api';
+  const apiBaseUrl = process.env.TARO_API_BASE_URL ||
+    (process.env.NODE_ENV === 'production' ? '' : DEFAULT_DEV_API);
+
   const baseConfig: UserConfigExport<'webpack5'> = {
-    projectName: 'taro_template',
-    date: '2025-12-10',
+    projectName: 'sp-smart-parent',
+    date: '2026-08-17',
     designWidth: 375,
     deviceRatio: {
       640: 2.34 / 2,
@@ -18,7 +21,9 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
     sourceRoot: 'src',
     outputRoot: process.env.TARO_OUTPUT_DIR || 'dist',
     plugins: ['@tarojs/plugin-html'],
-    defineConstants: {},
+    defineConstants: {
+      API_BASE_URL: JSON.stringify(apiBaseUrl),
+    },
     copy: {
       patterns: [],
       options: {},

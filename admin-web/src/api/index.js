@@ -1,12 +1,45 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const service = axios.create({
   baseURL: '/api',
   timeout: 15000
 })
 
+let _authRedirectInProgress = false
+const cleanseStaleMockToken = () => {
+  try {
+    const t = localStorage.getItem('token')
+    if (!t) return
+    if (t.includes('admin-token') || t.includes('teacher-token') || t.includes('test-token') || t.includes('mock')) {
+      localStorage.removeItem('token'); localStorage.removeItem('userInfo')
+      return
+    }
+    const parts = String(t).split('.')
+    if (parts.length !== 3) { localStorage.removeItem('token'); localStorage.removeItem('userInfo') }
+  } catch (_) { /* noop */ }
+}
+cleanseStaleMockToken()
+
+const triggerAuthRedirect = (msg) => {
+  if (_authRedirectInProgress) return
+  _authRedirectInProgress = true
+  try { localStorage.removeItem('token') } catch (_) { /* noop */ }
+  try { localStorage.removeItem('userInfo') } catch (_) { /* noop */ }
+  if (typeof window !== 'undefined' && window.location && window.location.pathname !== '/login') {
+    ElMessage.error(msg || '登录已过期，请重新登录')
+    setTimeout(() => {
+      _authRedirectInProgress = false
+      try { window.location.href = '/login' } catch (_) { /* noop */ }
+    }, 800)
+  } else {
+    setTimeout(() => { _authRedirectInProgress = false }, 800)
+  }
+}
+
 service.interceptors.request.use(
   config => {
+    cleanseStaleMockToken()
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -20,14 +53,38 @@ service.interceptors.request.use(
 
 service.interceptors.response.use(
   response => {
-    const res = response.data
-    if (res.code !== 0 && res.code !== 200) {
-      return Promise.reject(new Error(res.message || 'Error'))
+    const res =
+      response && response.data != null && typeof response.data === 'object'
+        ? response.data
+        : { code: -1, message: '服务器返回为空', data: null }
+    const code = res?.code ?? -1
+    const message = res?.message || 'Error'
+    const body = res?.data ?? res
+    if (code === 0 || code === 200) {
+      return body
     }
-    return res.data || res
+    if (code === 401 || code === 20001 || code === 20002 || code === 20003) {
+      triggerAuthRedirect(code === 20003 ? (res?.message || '请先登录') : '登录已过期，请重新登录')
+    } else {
+      ElMessage.error(message)
+    }
+    return Promise.reject(new Error(message))
   },
   error => {
-    console.warn('[API] Request failed, using mock data:', error.message)
+    const status = error?.response?.status
+    const data = error?.response?.data || {}
+    const code = typeof data === 'object' ? data?.code : null
+    const msg = data?.message || error?.message || '网络错误，请检查后端服务是否启动'
+    console.warn('[API] Request failed:', status, code, msg)
+    if (status === 401 || code === 20003 || code === 20001 || code === 20002) {
+      triggerAuthRedirect(code === 20003 ? (data?.message || '请先登录') : '登录已过期，请重新登录')
+    } else if (typeof status === 'number' && status >= 500) {
+      ElMessage.error(`后端服务异常 (HTTP ${status}): ${msg}`)
+    } else if (!status) {
+      ElMessage.error(`无法连接后端服务：${msg}。请确认后端 8080 端口已启动，或运行：cd /Users/bytedance/SP-Smart/backend && export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home && java -jar target/training-management-1.0.0.jar`)
+    } else {
+      ElMessage.error(msg)
+    }
     return Promise.reject(error)
   }
 )
@@ -128,75 +185,211 @@ const mockGetHourTransactions = () => {
   ])
 }
 
-const callWithMock = async (apiFn, mockFn, params) => {
+const READ_ONLY_APIS = new Set([
+  '/auth/login', '/auth/me',
+  '/admin/users', '/business/students', '/business/courses',
+  '/business/schedules', '/business/lessons', '/business/physical-tests',
+  '/business/hours/accounts/', '/business/hours/transactions/'
+])
+
+const isReadOnlyApi = (url, method) => {
+  if (method && method !== 'GET') return false
+  return [...READ_ONLY_APIS].some(prefix => url.includes(prefix.replace(/\/$/, '')) || url.startsWith(prefix))
+}
+
+const normalizeUrl = (configOrUrl) => {
+  if (typeof configOrUrl === 'string') return configOrUrl
+  if (configOrUrl && configOrUrl.url) return configOrUrl.url
+  return String(configOrUrl || '')
+}
+
+const callWithMock = async (apiFn, mockFn, params, config = {}) => {
   try {
-    return await apiFn(params)
+    const result = await apiFn(params)
+    return result
   } catch (err) {
-    console.warn('[API] Falling back to mock:', err.message)
+    const url = normalizeUrl(config.url || (apiFn && apiFn.toString ? apiFn.toString() : ''))
+    const method = config.method || 'GET'
+
+    const canFallbackMock = isReadOnlyApi(url, method)
+    if (!canFallbackMock) {
+      ElMessage.error(`操作失败: ${err?.message || err}`)
+      return Promise.reject(err)
+    }
+
+    const msg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err))
+    const shortMsg = typeof msg === 'string' && msg.length > 120 ? msg.slice(0, 120) + '…' : msg
+    console.warn('[API] 读接口降级为mock数据:', url, '| 原因:', shortMsg)
     return mockFn(params)
   }
 }
 
-export const login = (params) => callWithMock((p) => service.post('/auth/login', p), mockLogin, params)
+const readList = (maybePageResult) => {
+  if (Array.isArray(maybePageResult)) return maybePageResult
+  if (maybePageResult && typeof maybePageResult === 'object') {
+    if (Array.isArray(maybePageResult.list)) return maybePageResult.list
+    if (Array.isArray(maybePageResult.records)) return maybePageResult.records
+    if (Array.isArray(maybePageResult.rows)) return maybePageResult.rows
+    if (Array.isArray(maybePageResult.data)) return readList(maybePageResult.data)
+  }
+  return []
+}
+
+const readTotal = (maybePageResult, fallbackLen = 0) => {
+  if (Array.isArray(maybePageResult)) return maybePageResult.length
+  if (maybePageResult && typeof maybePageResult === 'object') {
+    const t = maybePageResult.total ?? maybePageResult.totalCount ?? maybePageResult.count
+    if (typeof t === 'number') return t
+    if (typeof t === 'string' && !Number.isNaN(Number(t))) return Number(t)
+    if (typeof maybePageResult.data === 'object') return readTotal(maybePageResult.data, fallbackLen)
+  }
+  return fallbackLen
+}
+
+export { readList, readTotal }
+
+const callWriteApi = async (apiFn, successMsg = '操作成功') => {
+  try {
+    const result = await apiFn()
+    if (successMsg) ElMessage.success(successMsg)
+    return result
+  } catch (err) {
+    const msg = err?.message || '操作失败，请检查后端服务'
+    ElMessage.error(msg)
+    return Promise.reject(err)
+  }
+}
+
+export const login = async (params) => {
+  const cleanUser = (resp) => {
+    const token = resp?.accessToken || resp?.token
+    const user = resp?.user || { username: params.username, role: resp?.role, id: resp?.userId }
+    const role = user?.role || resp?.role
+    if (token) {
+      localStorage.setItem('token', token)
+      localStorage.setItem('userInfo', JSON.stringify(user))
+    }
+    return { token, user, role }
+  }
+  const loginPayload = { ...(params || {}) }
+  delete loginPayload.role
+  delete loginPayload.captcha
+  try {
+    const resp = await service.post('/auth/login', loginPayload)
+    const { token, user, role } = cleanUser(resp)
+    if (String(role).toUpperCase() !== 'ADMIN') {
+      try {
+        localStorage.removeItem('token')
+        localStorage.removeItem('userInfo')
+      } catch (_) {}
+      throw new Error('当前账号无管理端访问权限')
+    }
+    return { token, user }
+  } catch (err) {
+    const msg = (err?.response?.data && (err.response.data.message || err.response.data.msg)) || err?.message || '登录失败'
+    const code = err?.response?.data?.code
+    if (code === 20005) {
+      throw new Error(msg || '用户名或密码错误')
+    }
+    if (!err?.status && !err?.response) {
+      throw new Error(`无法连接后端服务 (8080)：${msg || '连接被拒绝'}。请先确认后端启动：cd /Users/bytedance/SP-Smart/backend && export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home && java -jar target/training-management-1.0.0.jar`)
+    }
+    throw new Error(msg || '登录失败')
+  }
+}
+
+export const normalizeQueryParams = (params = {}) => {
+  const out = {}
+  for (const [k, rawV] of Object.entries(params || {})) {
+    if (k === 'total' || k === 'disabled') continue
+    let key = k
+    if (k === 'page') key = 'pageNum'
+    else if (k === 'size') key = 'pageSize'
+    let v = rawV
+    if (typeof v === 'string') {
+      v = v.trim()
+      if (v === '') continue
+    } else if (v === undefined || v === null) {
+      continue
+    }
+    out[key] = v
+  }
+  return out
+}
 
 export const getCurrentUser = () => callWithMock(() => service.get('/auth/me'), mockGetCurrentUser)
 
-export const getUsers = (params) => callWithMock((p) => service.get('/business/users', { params }), mockGetUsers, params)
+export const getUsers = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/admin/users', { params: p }), mockGetUsers, p, { url: '/admin/users', method: 'GET' })
+}
 
-export const createUser = (params) => callWithMock((p) => service.post('/business/users', p), () => Promise.resolve(params), params)
+export const createUser = (params) => callWriteApi(() => service.post('/admin/users', params), '创建用户成功')
+export const updateUser = (id, params) => callWriteApi(() => service.put(`/admin/users/${id}`, params), '更新用户成功')
+export const deleteUser = (id) => callWriteApi(() => service.delete(`/admin/users/${id}`), '删除用户成功')
+export const resetUserPassword = (id, data) => callWriteApi(() => service.post(`/admin/users/${id}/reset-password`, data), '密码重置成功！新密码已生效')
 
-export const updateUser = (id, params) => callWithMock((p) => service.put(`/business/users/${id}`, p), () => Promise.resolve({ ...params, id }), params)
+export const getStudents = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/business/students', { params: p }), mockGetStudents, p, { url: '/business/students', method: 'GET' })
+}
 
-export const deleteUser = (id) => callWithMock(() => service.delete(`/business/users/${id}`), () => Promise.resolve({ id }))
+export const createStudent = (params) => callWriteApi(() => service.post('/business/students', params), '创建学员成功')
+export const updateStudent = (id, params) => callWriteApi(() => service.put(`/business/students/${id}`, params), '更新学员成功')
+export const deleteStudent = (id) => callWriteApi(() => service.delete(`/business/students/${id}`), '删除学员成功')
 
-export const getStudents = (params) => callWithMock((p) => service.get('/business/students', { params }), mockGetStudents, params)
+export const getCourses = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/business/courses', { params: p }), mockGetCourses, p, { url: '/business/courses', method: 'GET' })
+}
 
-export const createStudent = (params) => callWithMock((p) => service.post('/business/students', p), () => Promise.resolve(params), params)
+export const createCourse = (params) => callWriteApi(() => service.post('/business/courses', params), '创建课程成功')
+export const updateCourse = (id, params) => callWriteApi(() => service.put(`/business/courses/${id}`, params), '更新课程成功')
+export const deleteCourse = (id) => callWriteApi(() => service.delete(`/business/courses/${id}`), '删除课程成功')
 
-export const updateStudent = (id, params) => callWithMock((p) => service.put(`/business/students/${id}`, p), () => Promise.resolve({ ...params, id }), params)
+export const getSchedules = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/business/schedules', { params: p }), mockGetSchedules, p, { url: '/business/schedules', method: 'GET' })
+}
 
-export const deleteStudent = (id) => callWithMock(() => service.delete(`/business/students/${id}`), () => Promise.resolve({ id }))
+export const createSchedule = (params) => callWriteApi(() => service.post('/business/schedules', params), '创建排课成功')
+export const updateSchedule = (id, params) => callWriteApi(() => service.put(`/business/schedules/${id}`, params), '更新排课成功')
+export const deleteSchedule = (id) => callWriteApi(() => service.delete(`/business/schedules/${id}`), '删除排课成功')
 
-export const getCourses = (params) => callWithMock((p) => service.get('/business/courses', { params }), mockGetCourses, params)
+export const getLessons = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/business/lessons', { params: p }), mockGetLessons, p, { url: '/business/lessons', method: 'GET' })
+}
 
-export const createCourse = (params) => callWithMock((p) => service.post('/business/courses', p), () => Promise.resolve(params), params)
+export const startLesson = (id) => callWriteApi(() => service.post(`/business/lessons/${id}/start`), '上课成功')
+export const completeLesson = (id) => callWriteApi(() => service.post(`/business/lessons/${id}/complete`), '结课成功')
+export const cancelLesson = (id, reason) => callWriteApi(() => service.post(`/business/lessons/${id}/cancel`, { reason }), '取消课程成功')
 
-export const updateCourse = (id, params) => callWithMock((p) => service.put(`/business/courses/${id}`, p), () => Promise.resolve({ ...params, id }), params)
+export const recordAttendance = (params) => callWriteApi(() => service.post('/business/attendance', params), '考勤记录成功')
 
-export const deleteCourse = (id) => callWithMock(() => service.delete(`/business/courses/${id}`), () => Promise.resolve({ id }))
+export const getPhysicalTests = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/business/physical-tests', { params: p }), mockGetPhysicalTests, p, { url: '/business/physical-tests', method: 'GET' })
+}
+export const getPhysicalItems = () => callWithMock(() => service.get('/business/physical-tests/items'), Promise.resolve([]), {}, { url: '/business/physical-tests/items', method: 'GET' })
 
-export const getSchedules = (params) => callWithMock((p) => service.get('/business/schedules', { params }), mockGetSchedules, params)
+export const createPhysicalTest = (params) => callWriteApi(() => service.post('/business/physical-tests', params), '创建体测记录成功')
+export const updatePhysicalTest = (id, params) => callWriteApi(() => service.put(`/business/physical-tests/${id}`, params), '更新体测记录成功')
+export const deletePhysicalTest = (id) => callWriteApi(() => service.delete(`/business/physical-tests/${id}`), '删除体测记录成功')
 
-export const createSchedule = (params) => callWithMock((p) => service.post('/business/schedules', p), () => Promise.resolve(params), params)
+export const getHourAccounts = (params) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get('/business/hours/accounts', { params: p }), mockGetHourAccounts, p, { url: '/business/hours/accounts', method: 'GET' })
+}
 
-export const updateSchedule = (id, params) => callWithMock((p) => service.put(`/business/schedules/${id}`, p), () => Promise.resolve({ ...params, id }), params)
+export const getHourAccount = (studentId) => callWithMock(() => service.get(`/business/hours/accounts/${studentId}`), Promise.resolve({}), {}, { url: `/business/hours/accounts/${studentId}`, method: 'GET' })
 
-export const deleteSchedule = (id) => callWithMock(() => service.delete(`/business/schedules/${id}`), () => Promise.resolve({ id }))
+export const rechargeHours = (params) => callWriteApi(() => service.post('/business/hours/recharge', params), '充值成功')
+export const refundHours = (params) => callWriteApi(() => service.post('/business/hours/refund', params), '退款成功')
 
-export const getLessons = (params) => callWithMock((p) => service.get('/business/lessons', { params }), mockGetLessons, params)
-
-export const startLesson = (id) => callWithMock(() => service.post(`/business/lessons/${id}/start`), () => Promise.resolve({ success: true }))
-
-export const completeLesson = (id) => callWithMock(() => service.post(`/business/lessons/${id}/complete`), () => Promise.resolve({ success: true }))
-
-export const cancelLesson = (id, reason) => callWithMock(() => service.post(`/business/lessons/${id}/cancel`, { reason }), () => Promise.resolve({ success: true }))
-
-export const recordAttendance = (params) => callWithMock((p) => service.post('/business/attendance', p), () => Promise.resolve({ success: true }), params)
-
-export const getPhysicalTests = (params) => callWithMock((p) => service.get('/business/physical-tests', { params }), mockGetPhysicalTests, params)
-
-export const createPhysicalTest = (params) => callWithMock((p) => service.post('/business/physical-tests', p), () => Promise.resolve({ record: params }), params)
-
-export const updatePhysicalTest = (id, params) => callWithMock((p) => service.put(`/business/physical-tests/${id}`, p), () => Promise.resolve({ ...params, id }), params)
-
-export const deletePhysicalTest = (id) => callWithMock(() => service.delete(`/business/physical-tests/${id}`), () => Promise.resolve({ id }))
-
-export const getHourAccounts = (params) => callWithMock((p) => service.get('/business/hour-accounts', { params }), mockGetHourAccounts, params)
-
-export const rechargeHours = (params) => callWithMock((p) => service.post('/business/hour-accounts/recharge', p), () => Promise.resolve({ success: true }), params)
-
-export const refundHours = (params) => callWithMock((p) => service.post('/business/hour-accounts/refund', p), () => Promise.resolve({ success: true }), params)
-
-export const getHourTransactions = (params) => callWithMock((p) => service.get('/business/hour-transactions', { params }), mockGetHourTransactions, params)
+export const getHourTransactions = (studentId, params = {}) => {
+  const p = normalizeQueryParams(params)
+  return callWithMock(() => service.get(`/business/hours/transactions/${studentId}`, { params: p }), mockGetHourTransactions, p, { url: `/business/hours/transactions/${studentId}`, method: 'GET' })
+}
 
 export default service

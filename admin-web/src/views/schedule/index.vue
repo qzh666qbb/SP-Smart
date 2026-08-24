@@ -5,7 +5,7 @@
         <h2>排课管理</h2>
         <p class="page-desc">管理课程排课安排，包括时间、教师和课程设置</p>
       </div>
-      <el-button type="primary" class="btn-primary" @click="showAddModal = true">
+      <el-button type="primary" class="btn-primary" @click="handleAdd">
         <el-icon><el-icon-plus /></el-icon>
         新增排课
       </el-button>
@@ -37,7 +37,7 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button type="primary" size="small" class="btn-edit" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger" size="small" class="btn-delete" @click="handleDelete(row)">删除</el-button>
+              <el-button type="danger" size="small" class="btn-delete" @click.stop="handleDelete(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -57,24 +57,29 @@
       </div>
     </div>
 
-    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑排课' : '新增排课'" width="520px" class="custom-dialog">
-      <el-form :model="form" :rules="rules" ref="formRef" class="modal-form">
-        <el-form-item prop="scheduleName" label="排课名称">
-          <el-input v-model="form.scheduleName" placeholder="请输入排课名称" />
+    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑排课' : '新增排课'" width="560px" class="custom-dialog">
+      <el-form :model="form" :rules="rules" ref="formRef" class="modal-form" label-width="110px">
+        <el-form-item prop="seriesName" label="排课名称">
+          <el-input v-model="form.seriesName" placeholder="请输入排课名称" />
         </el-form-item>
         <el-form-item prop="courseId" label="课程">
-          <el-select v-model="form.courseId" placeholder="请选择课程">
-            <el-option v-for="course in courses" :key="course.id" :label="course.courseName" :value="course.id" />
+          <el-select v-model="form.courseId" placeholder="请选择课程" filterable style="width: 100%">
+            <el-option v-for="course in courses" :key="course.id" :label="course.courseName || course.name" :value="course.id" />
           </el-select>
         </el-form-item>
-        <el-form-item prop="scheduleType" label="排课类型">
-          <el-select v-model="form.scheduleType" placeholder="请选择排课类型">
-            <el-option label="单次" value="SINGLE" />
-            <el-option label="周期" value="RECURRING" />
+        <el-form-item prop="teacherId" label="授课老师">
+          <el-select v-model="form.teacherId" placeholder="请选择授课老师" filterable style="width: 100%">
+            <el-option v-for="u in teachers" :key="u.id" :label="u.username" :value="u.id" />
           </el-select>
         </el-form-item>
-        <el-form-item prop="weekDays" label="星期" v-if="form.scheduleType === 'RECURRING'">
-          <el-select v-model="form.weekDays" multiple placeholder="请选择星期">
+        <el-form-item prop="recurrenceType" label="排课类型">
+          <el-select v-model="form.recurrenceType" placeholder="请选择排课类型" style="width: 100%" @change="v => { if (v === 'NONE') form.weekDays = [] }">
+            <el-option label="单次" value="NONE" />
+            <el-option label="周循环" value="WEEKLY" />
+          </el-select>
+        </el-form-item>
+        <el-form-item prop="weekDays" label="星期" v-if="form.recurrenceType === 'WEEKLY'">
+          <el-select v-model="form.weekDays" multiple placeholder="请选择星期" style="width: 100%">
             <el-option label="周一" value="MONDAY" />
             <el-option label="周二" value="TUESDAY" />
             <el-option label="周三" value="WEDNESDAY" />
@@ -85,16 +90,19 @@
           </el-select>
         </el-form-item>
         <el-form-item prop="startDate" label="开始日期">
-          <el-date-picker v-model="form.startDate" type="date" placeholder="请选择开始日期" />
+          <el-date-picker v-model="form.startDate" type="date" placeholder="请选择开始日期" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item prop="endDate" label="结束日期">
-          <el-date-picker v-model="form.endDate" type="date" placeholder="请选择结束日期" />
+          <el-date-picker v-model="form.endDate" type="date" placeholder="请选择结束日期" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item prop="startTime" label="开始时间">
-          <el-time-picker v-model="form.startTime" format="HH:mm" placeholder="请选择开始时间" />
+          <el-time-picker v-model="form.startTime" format="HH:mm" value-format="HH:mm" placeholder="请选择开始时间" style="width: 100%" />
         </el-form-item>
         <el-form-item prop="endTime" label="结束时间">
-          <el-time-picker v-model="form.endTime" format="HH:mm" placeholder="请选择结束时间" />
+          <el-time-picker v-model="form.endTime" format="HH:mm" value-format="HH:mm" placeholder="请选择结束时间" style="width: 100%" />
+        </el-form-item>
+        <el-form-item prop="consumeHours" label="消耗课时">
+          <el-input-number v-model="form.consumeHours" :min="0.5" :max="20" :step="0.5" :precision="1" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -106,11 +114,13 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getCourses } from '@/api'
+import { ref, reactive, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getCourses, getUsers } from '@/api'
 
 const tableData = ref([])
 const courses = ref([])
+const teachers = ref([])
 const searchForm = reactive({ keyword: '', date: '' })
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showAddModal = ref(false)
@@ -119,86 +129,126 @@ const formRef = ref(null)
 
 const form = reactive({
   id: '',
-  scheduleName: '',
+  seriesName: '',
   courseId: '',
-  scheduleType: 'SINGLE',
+  teacherId: '',
+  classGroupId: null,
+  recurrenceType: 'NONE',
   weekDays: [],
   startDate: '',
   endDate: '',
   startTime: '',
-  endTime: ''
+  endTime: '',
+  consumeHours: 1.5
 })
 
 const rules = {
-  scheduleName: [{ required: true, message: '请输入排课名称', trigger: 'blur' }],
+  seriesName: [{ required: true, message: '请输入排课名称', trigger: 'blur' }],
   courseId: [{ required: true, message: '请选择课程', trigger: 'change' }],
-  scheduleType: [{ required: true, message: '请选择排课类型', trigger: 'change' }],
+  teacherId: [{ required: true, message: '请选择授课老师', trigger: 'change' }],
+  recurrenceType: [{ required: true, message: '请选择排课类型', trigger: 'change' }],
   startDate: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
-  endDate: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-  endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
+  endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }],
+  consumeHours: [{ required: true, message: '请输入消耗课时', trigger: 'blur' }]
 }
 
 const tableRowClassName = ({ rowIndex }) => {
-  if (rowIndex % 2 === 1) {
-    return 'row-stripe'
-  }
+  if (rowIndex % 2 === 1) return 'row-stripe'
   return ''
 }
 
 const fetchData = async () => {
   try {
     const res = await getSchedules({ ...searchForm, ...pagination })
-    tableData.value = res.list || res
-    pagination.total = res.total || tableData.value.length
+    tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    tableData.value = []
+    pagination.total = 0
   }
 }
 
 const fetchCourses = async () => {
   try {
     const res = await getCourses()
-    courses.value = res.list || res
+    courses.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
   } catch (err) {
     console.error(err)
+    courses.value = []
   }
 }
 
-const handleSearch = () => {
-  pagination.page = 1
-  fetchData()
+const fetchTeachers = async () => {
+  try {
+    const res = await getUsers({ pageNum: 1, pageSize: 100, role: 'TEACHER' })
+    const all = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    teachers.value = all.filter(u => u.role === 'TEACHER' || u.username === 'teacher' || !u.role)
+  } catch (err) {
+    console.error(err)
+    teachers.value = []
+  }
 }
 
-const resetSearch = () => {
-  searchForm.keyword = ''
-  searchForm.date = ''
-  pagination.page = 1
-  fetchData()
+const handleSearch = () => { pagination.page = 1; fetchData() }
+const resetSearch = () => { searchForm.keyword = ''; searchForm.date = ''; pagination.page = 1; fetchData() }
+const handleSizeChange = (size) => { pagination.size = size; fetchData() }
+const handleCurrentChange = (page) => { pagination.page = page; fetchData() }
+
+const resetForm = () => {
+  form.id = ''
+  form.seriesName = ''
+  form.courseId = ''
+  form.teacherId = ''
+  form.classGroupId = null
+  form.recurrenceType = 'NONE'
+  form.weekDays = []
+  form.startDate = ''
+  form.endDate = ''
+  form.startTime = ''
+  form.endTime = ''
+  form.consumeHours = 1.5
 }
 
-const handleSizeChange = (size) => {
-  pagination.size = size
-  fetchData()
+const toPlainDate = (v) => {
+  if (!v) return v
+  if (typeof v === 'string') return v.slice(0, 10)
+  return v
 }
 
-const handleCurrentChange = (page) => {
-  pagination.page = page
-  fetchData()
+const handleAdd = () => {
+  isEdit.value = false
+  resetForm()
+  showAddModal.value = true
 }
 
 const handleEdit = (row) => {
   isEdit.value = true
-  Object.assign(form, row)
+  resetForm()
+  Object.assign(form, row || {})
+  // 兼容旧列名
+  form.seriesName = form.seriesName || row.scheduleName
+  form.recurrenceType = form.recurrenceType || (row.scheduleType === 'RECURRING' ? 'WEEKLY' : 'NONE')
+  form.startDate = form.startDate || toPlainDate(row.startDate)
+  form.endDate = form.endDate || toPlainDate(row.endDate)
   showAddModal.value = true
 }
 
-const handleDelete = (row) => {
-  if (!confirm(`确定删除排课 ${row.scheduleName} ?`)) return
-  deleteSchedule(row.id).then(() => {
-    alert('删除成功')
+const handleDelete = async (row) => {
+  const target = row?.seriesName || row?.scheduleName ? `排课 ${row.seriesName || row.scheduleName}` : '该排课'
+  try {
+    await ElMessageBox.confirm(`确定删除${target}？删除后该系列所有课程实例将被一并移除，消课记录不会保留回滚。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', distinguishCancelAndClose: true
+    })
+  } catch (_) { return }
+  try {
+    await deleteSchedule(row.id)
+    ElMessage.success('删除成功')
     fetchData()
-  }).catch(() => alert('删除失败'))
+  } catch (err) {
+    ElMessage.error(err?.message || '删除失败')
+  }
 }
 
 const handleSubmit = async () => {
@@ -206,23 +256,39 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     try {
+      const payload = {
+        seriesName: form.seriesName,
+        courseId: Number(form.courseId) || 0,
+        teacherId: Number(form.teacherId) || 0,
+        classGroupId: form.classGroupId ? Number(form.classGroupId) : null,
+        recurrenceType: form.recurrenceType,
+        weekdays: Array.isArray(form.weekDays) && form.weekDays.length > 0 ? form.weekDays.join(',') : null,
+        startDate: form.startDate,
+        endDate: form.endDate || null,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        consumeHours: Number(form.consumeHours) || 0
+      }
       if (isEdit.value) {
-        await updateSchedule(form.id, form)
-        alert('更新成功')
+        await updateSchedule(form.id, payload)
+        ElMessage.success('更新成功')
       } else {
-        await createSchedule(form)
-        alert('创建成功')
+        await createSchedule(payload)
+        ElMessage.success('创建成功')
       }
       showAddModal.value = false
       fetchData()
     } catch (err) {
-      alert('操作失败')
+      ElMessage.error(err?.message || '操作失败')
     }
   })
 }
 
+// 新增排课按钮绑定到 handleAdd
+// 模板中 showAddModal=true 但前面模板会替换
 fetchData()
 fetchCourses()
+fetchTeachers()
 </script>
 
 <style scoped>

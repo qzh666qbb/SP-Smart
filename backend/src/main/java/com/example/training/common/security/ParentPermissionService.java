@@ -20,14 +20,15 @@ public class ParentPermissionService {
             return true;
         }
         if ("PARENT".equals(user.getRole())) {
-            Long parentId = user.getProfileId();
-            if (parentId == null) {
-                return false;
-            }
+            java.util.List<Long> candidates = new java.util.ArrayList<>();
+            if (user.getProfileId() != null) candidates.add(user.getProfileId());
+            if (user.getUserId() != null) candidates.add(user.getUserId());
+            if (candidates.isEmpty()) return false;
             Long count = parentStudentRelationMapper.selectCount(
                     new LambdaQueryWrapper<ParentStudentRelationEntity>()
-                            .eq(ParentStudentRelationEntity::getParentId, parentId)
+                            .in(ParentStudentRelationEntity::getParentId, candidates)
                             .eq(ParentStudentRelationEntity::getStudentId, studentId)
+                            .eq(ParentStudentRelationEntity::getBindStatus, "CONFIRMED")
             );
             return count != null && count > 0;
         }

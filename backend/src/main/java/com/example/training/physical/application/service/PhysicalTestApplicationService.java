@@ -2,6 +2,7 @@ package com.example.training.physical.application.service;
 
 import com.example.training.common.exception.BusinessException;
 import com.example.training.common.exception.ErrorCode;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
 import com.example.training.physical.application.dto.PhysicalTestCreateRequest;
 import com.example.training.physical.domain.model.PhysicalScoreDetail;
@@ -13,6 +14,8 @@ import com.example.training.student.domain.model.Student;
 import com.example.training.student.domain.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +30,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PhysicalTestApplicationService {
+    private static final Logger log = LoggerFactory.getLogger(PhysicalTestApplicationService.class);
+
     
     private final PhysicalTestRepository physicalTestRepository;
     private final PhysicalScoringEngine scoringEngine;
@@ -151,7 +156,42 @@ public class PhysicalTestApplicationService {
     }
     
     public List<PhysicalTestRecord> listTestRecords(Long testerId) {
-        return physicalTestRepository.findByTesterId(testerId);
+        return listTestRecordsPage(testerId, null, 1, Integer.MAX_VALUE).getList();
+    }
+
+    public PageResult<PhysicalTestRecord> listTestRecordsPage(Long testerId, String keyword, int pageNum, int pageSize) {
+        List<PhysicalTestRecord> all = physicalTestRepository.findByTesterId(testerId);
+        String kw = keyword == null ? null : keyword.trim().toLowerCase();
+        java.util.Set<Long> matchedStudentIds = null;
+        if (kw != null && !kw.isEmpty()) {
+            matchedStudentIds = studentRepository.findAll().stream()
+                    .filter(s -> contains(s.getName(), kw)
+                            || contains(s.getStudentNo(), kw)
+                            || contains(s.getPhone(), kw)
+                            || contains(s.getParentName(), kw)
+                            || contains(s.getParentPhone(), kw))
+                    .map(Student::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+        final java.util.Set<Long> matchedIds = matchedStudentIds;
+        List<PhysicalTestRecord> filtered = all.stream()
+                .filter(r -> kw == null || kw.isEmpty()
+                        || contains(r.getRecordNo(), kw)
+                        || contains(r.getOverallLevel(), kw)
+                        || contains(r.getStatus(), kw)
+                        || contains(r.getRemark(), kw)
+                        || contains(r.getTestDate() == null ? null : r.getTestDate().toString(), kw)
+                        || (r.getStudentId() != null && matchedIds != null && matchedIds.contains(r.getStudentId())))
+                .collect(java.util.stream.Collectors.toList());
+        int from = Math.max(0, (pageNum - 1) * pageSize);
+        int to = Math.min(from + pageSize, filtered.size());
+        List<PhysicalTestRecord> page = from >= filtered.size() ? new ArrayList<>() : new ArrayList<>(filtered.subList(from, to));
+        return PageResult.of(page, filtered.size(), pageNum, pageSize);
+    }
+
+    private static boolean contains(String src, String lowerKw) {
+        if (src == null || lowerKw == null) return false;
+        return src.toLowerCase().contains(lowerKw);
     }
     
     @Transactional
@@ -231,5 +271,14 @@ public class PhysicalTestApplicationService {
     public PhysicalTestRecord getLatestRecord(Long studentId) {
         return physicalTestRepository.findLatestByStudentId(studentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND));
+    }
+
+    @Transactional
+    public void deleteTestRecord(Long recordId) {
+        PhysicalTestRecord record = physicalTestRepository.findRecordById(recordId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND));
+        record.setDeletedAt(java.time.LocalDateTime.now());
+        physicalTestRepository.saveRecord(record);
+        log.info("删除体测记录: recordId={}", recordId);
     }
 }

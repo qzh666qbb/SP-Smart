@@ -1,0 +1,123 @@
+@use '@/styles/variables.scss' as *;
+
+.addEditPage {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding-bottom: 160rpx;
+}
+
+.container {
+  padding: $spacing-lg;
+}
+
+.formCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg $spacing-xl;
+  box-shadow: $shadow-card;
+}
+
+.field {
+  margin-bottom: $spacing-lg;
+
+  &:last-of-type {
+    margin-bottom: 0;
+  }
+}
+
+.fieldLabel {
+  display: block;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  font-weight: $font-weight-medium;
+  margin-bottom: $spacing-sm;
+
+  .required {
+    color: $color-error;
+    margin-right: 4rpx;
+  }
+}
+
+.inputWrap {
+  width: 100%;
+  min-height: $button-height-md;
+  padding: 0 $spacing-md;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+  font-size: $font-size-md;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+
+.datePickerWrap {
+  width: 100%;
+  min-height: $button-height-md;
+  padding: 0 $spacing-md;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+  font-size: $font-size-md;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+
+  .dateValue {
+    flex: 1;
+    color: $color-text-primary;
+    line-height: $button-height-md;
+  }
+
+  .placeholder {
+    color: $color-text-disabled;
+  }
+}
+
+.genderRow {
+  display: flex;
+  gap: $spacing-md;
+}
+
+.genderOption {
+  flex: 1;
+  padding: $spacing-md;
+  text-align: center;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+  background: $color-bg-card;
+  color: $color-text-primary;
+  font-size: $font-size-md;
+  transition: all $transition-fast;
+
+  &.active {
+    border-color: $color-primary;
+    background: $color-primary-light;
+    color: $color-primary;
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.textareaWrap {
+  width: 100%;
+  min-height: 180rpx;
+  padding: $spacing-sm $spacing-md;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+  box-sizing: border-box;
+
+  .textarea {
+    width: 100%;
+    min-height: 156rpx;
+    font-size: $font-size-md;
+    line-height: $line-height-normal;
+  }
+}
+
+.submitWrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: $spacing-md $spacing-lg $spacing-lg;
+  background: $color-bg-card;
+  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, 0.06);
+}

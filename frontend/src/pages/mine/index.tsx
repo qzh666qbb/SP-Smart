@@ -5,6 +5,7 @@ import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
 import useAuthStore from '@/store/auth';
 import { UserRole, TeacherProfile, ParentProfile } from '@/types';
+import { notifyTabBarActive } from '@/utils/tabbar';
 import styles from './index.module.scss';
 
 interface MenuItem {
@@ -16,6 +17,7 @@ interface MenuItem {
 }
 
 export default function MinePage() {
+  Taro.useDidShow(() => notifyTabBarActive('/pages/mine/index'));
   const { user, profile, logout, isLoggedIn } = useAuthStore();
   
   const getRoleText = (role: UserRole) => {

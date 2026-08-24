@@ -33,19 +33,23 @@ export interface Student {
   id: string;
   name: string;
   age?: number;
-  gender?: 'MALE' | 'FEMALE';
+  gender?: 'MALE' | 'FEMALE' | 'UNKNOWN';
   parentId?: string;
   parentName?: string;
   parentPhone?: string;
   teacherId?: string;
   studentNo?: string;
   createTime?: string;
+  birthDate?: string;
+  phone?: string;
+  medicalNotes?: string;
+  remark?: string;
 }
 
 export interface LoginParams {
   username: string;
   password: string;
-  role: UserRole;
+  role?: UserRole;
 }
 
 export interface LoginResult {

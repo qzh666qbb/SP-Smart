@@ -27,19 +27,24 @@ export interface PhysicalScoreDetail {
 
 export interface PhysicalTestRecord {
   id: string;
-  recordNo: string;
+  recordNo?: string;
   studentId: string;
-  testerId: string;
+  testerId?: string;
   testDate: string;
-  totalScore: number;
-  overallLevel: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
-  status: 'DRAFT' | 'CONFIRMED';
+  totalScore?: number;
+  overallLevel?: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
+  scoreLevel?: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
+  gradeLevel?: string;
+  status?: 'DRAFT' | 'CONFIRMED';
   remark?: string;
+  evaluation?: string;
   createTime?: string;
   scores?: PhysicalScoreDetail[];
+  details?: PhysicalScoreDetail[];
+  items?: PhysicalScoreDetail[];
   teacherName?: string;
-  evaluation?: string;
   studentName?: string;
+  recordNoGenerated?: string;
 }
 
 export interface PhysicalTestCreateRequest {

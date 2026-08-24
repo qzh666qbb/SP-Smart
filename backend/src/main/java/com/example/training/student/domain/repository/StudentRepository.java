@@ -14,8 +14,14 @@ public interface StudentRepository {
     
     Optional<Student> findByStudentNo(String studentNo);
     
+    List<Student> findAll();
+
     List<Student> findByTeacherId(Long teacherId);
-    
+
+    boolean existsByTeacherAndStudentId(Long teacherId, Long studentId);
+
+    Optional<Student> findByBindMatch(String studentNo, String name, String parentPhone);
+
     List<Student> findByParentId(Long parentId);
     
     ParentStudentRelation saveRelation(ParentStudentRelation relation);

@@ -3,6 +3,8 @@
 .homePage {
   min-height: 100vh;
   background: $color-bg-page;
+  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .studentCard {

@@ -9,8 +9,12 @@ import com.example.training.hour.infrastructure.persistence.HourTransactionMappe
 import com.example.training.hour.infrastructure.persistence.StudentHourAccountEntity;
 import com.example.training.hour.infrastructure.persistence.StudentHourAccountMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -21,16 +25,31 @@ public class HourRepositoryImpl implements HourRepository {
     
     private final StudentHourAccountMapper accountMapper;
     private final HourTransactionMapper transactionMapper;
+    private final JdbcTemplate jdbcTemplate;
     
     @Override
     public StudentHourAccount saveAccount(StudentHourAccount account) {
         StudentHourAccountEntity entity = convertToEntity(account);
         if (account.getId() == null) {
             accountMapper.insert(entity);
+            if (entity.getId() == null && account.getStudentId() != null) {
+                StudentHourAccountEntity found = accountMapper.selectOne(
+                    new LambdaQueryWrapper<StudentHourAccountEntity>()
+                        .eq(StudentHourAccountEntity::getStudentId, account.getStudentId())
+                        .orderByDesc(StudentHourAccountEntity::getId)
+                        .last("LIMIT 1"));
+                if (found != null) {
+                    entity.setId(found.getId());
+                }
+            }
         } else {
-            accountMapper.updateById(entity);
+            int rows = accountMapper.updateWithVersion(entity);
+            if (rows == 0) {
+                throw new com.baomidou.mybatisplus.core.exceptions.MybatisPlusException("课时账户版本冲突，数据已被并发修改: id=" + account.getId());
+            }
         }
-        return convertToDomain(entity);
+        StudentHourAccountEntity saved = accountMapper.selectById(entity.getId());
+        return convertToDomain(saved);
     }
     
     @Override
@@ -44,7 +63,11 @@ public class HourRepositoryImpl implements HourRepository {
     
     @Override
     public StudentHourAccount getAccountForUpdate(Long studentId) {
-        return null;
+        StudentHourAccountEntity entity = accountMapper.selectForUpdate(studentId);
+        if (entity == null) {
+            return null;
+        }
+        return convertToDomain(entity);
     }
     
     @Override
@@ -100,6 +123,55 @@ public class HourRepositoryImpl implements HourRepository {
                         .orderByDesc(HourTransactionEntity::getCreatedAt)
         );
         return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Object[]> listAccountsRaw(String keyword, int offset, int pageSize) {
+        StringBuilder sql = new StringBuilder(
+                "SELECT a.id, a.student_id, s.name AS student_name, s.student_no, " +
+                        "s.parent_name, s.parent_phone, " +
+                        "COALESCE(a.total_recharged, 0), COALESCE(a.total_consumed, 0), COALESCE(a.remaining_hours, 0), " +
+                        "COALESCE(a.paid_hours, 0), COALESCE(a.gift_hours, 0), a.created_at " +
+                        "FROM student s LEFT JOIN student_hour_account a ON a.student_id = s.id " +
+                        "WHERE s.deleted_at IS NULL ");
+        List<Object> args = new ArrayList<>();
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append("AND (s.name LIKE ? OR s.student_no LIKE ? OR s.parent_name LIKE ? OR s.parent_phone LIKE ?) ");
+            String like = "%" + keyword.trim() + "%";
+            args.add(like); args.add(like); args.add(like); args.add(like);
+        }
+        sql.append("ORDER BY a.updated_at DESC, s.id DESC LIMIT ? OFFSET ?");
+        args.add(pageSize);
+        args.add(offset);
+        return jdbcTemplate.query(sql.toString(), args.toArray(), (rs, row) -> new Object[]{
+                rs.getObject(1, Long.class),
+                rs.getObject(2, Long.class),
+                rs.getString(3),
+                rs.getString(4),
+                rs.getString(5),
+                rs.getString(6),
+                rs.getBigDecimal(7),
+                rs.getBigDecimal(8),
+                rs.getBigDecimal(9),
+                rs.getBigDecimal(10),
+                rs.getBigDecimal(11),
+                rs.getTimestamp(12) != null ? rs.getTimestamp(12).toLocalDateTime() : null
+        });
+    }
+
+    @Override
+    public long countAccounts(String keyword) {
+        StringBuilder sql = new StringBuilder(
+                "SELECT COUNT(*) FROM student s LEFT JOIN student_hour_account a ON a.student_id = s.id " +
+                        "WHERE s.deleted_at IS NULL ");
+        List<Object> args = new ArrayList<>();
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append("AND (s.name LIKE ? OR s.student_no LIKE ? OR s.parent_name LIKE ? OR s.parent_phone LIKE ?) ");
+            String like = "%" + keyword.trim() + "%";
+            args.add(like); args.add(like); args.add(like); args.add(like);
+        }
+        Long cnt = jdbcTemplate.queryForObject(sql.toString(), args.toArray(), Long.class);
+        return cnt == null ? 0L : cnt;
     }
     
     private StudentHourAccountEntity convertToEntity(StudentHourAccount account) {

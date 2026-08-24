@@ -1,0 +1,21 @@
+[Unit]
+Description=Training Management Backend (Spring Boot)
+After=network.target mariadb.service redis.service
+
+[Service]
+Type=simple
+User=training
+Group=training
+WorkingDirectory=/opt/training/backend
+ExecStart=/usr/bin/java -jar -Dspring.profiles.active=prod /opt/training/backend/app.jar
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/training/backend.log
+StandardError=append:/var/log/training/backend-error.log
+EnvironmentFile=/opt/training/backend/.env
+
+# JVM 调优（2C4G 服务器建议）
+Environment="JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+
+[Install]
+WantedBy=multi-user.target

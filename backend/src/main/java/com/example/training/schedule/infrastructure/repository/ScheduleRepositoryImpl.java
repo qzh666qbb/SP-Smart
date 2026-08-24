@@ -47,11 +47,12 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public List<ScheduleSeries> findByTeacherId(Long teacherId) {
-        List<ScheduleSeriesEntity> entities = scheduleSeriesMapper.selectList(
-                new LambdaQueryWrapper<ScheduleSeriesEntity>()
-                        .eq(ScheduleSeriesEntity::getTeacherId, teacherId)
-                        .isNull(ScheduleSeriesEntity::getDeletedAt)
-        );
+        LambdaQueryWrapper<ScheduleSeriesEntity> wrapper = new LambdaQueryWrapper<ScheduleSeriesEntity>()
+                .isNull(ScheduleSeriesEntity::getDeletedAt);
+        if (teacherId != null) {
+            wrapper.eq(ScheduleSeriesEntity::getTeacherId, teacherId);
+        }
+        List<ScheduleSeriesEntity> entities = scheduleSeriesMapper.selectList(wrapper);
         return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
     }
     
@@ -70,10 +71,27 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
         LessonEntity entity = convertToEntity(lesson);
         if (lesson.getId() == null) {
             lessonMapper.insert(entity);
+            if (entity.getId() == null) {
+                LessonEntity found = lessonMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<LessonEntity>()
+                        .eq(LessonEntity::getLessonNo, lesson.getLessonNo())
+                        .orderByDesc(LessonEntity::getId)
+                        .last("LIMIT 1"));
+                if (found != null) {
+                    entity.setId(found.getId());
+                }
+            }
         } else {
-            lessonMapper.updateById(entity);
+            int rows = lessonMapper.updateWithVersion(entity);
+            if (rows == 0) {
+                throw new com.baomidou.mybatisplus.core.exceptions.MybatisPlusException("课程版本冲突，数据已被并发修改: id=" + lesson.getId());
+            }
         }
-        return convertToDomain(entity);
+        LessonEntity saved = lessonMapper.selectById(entity.getId());
+        if (saved == null) {
+            throw new com.baomidou.mybatisplus.core.exceptions.MybatisPlusException("课程读取失败: id=" + entity.getId());
+        }
+        return convertToDomain(saved);
     }
     
     @Override
@@ -94,12 +112,14 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public List<Lesson> findByTeacherIdAndDate(Long teacherId, LocalDate date) {
-        List<LessonEntity> entities = lessonMapper.selectList(
-                new LambdaQueryWrapper<LessonEntity>()
-                        .eq(LessonEntity::getTeacherId, teacherId)
-                        .eq(LessonEntity::getLessonDate, date)
-                        .isNull(LessonEntity::getDeletedAt)
-        );
+        LambdaQueryWrapper<LessonEntity> wrapper = new LambdaQueryWrapper<LessonEntity>()
+                .eq(LessonEntity::getLessonDate, date)
+                .isNull(LessonEntity::getDeletedAt);
+        if (teacherId != null) {
+            wrapper.eq(LessonEntity::getTeacherId, teacherId);
+        }
+        wrapper.orderByAsc(LessonEntity::getStartTime);
+        List<LessonEntity> entities = lessonMapper.selectList(wrapper);
         return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
     }
     
@@ -117,7 +137,26 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public List<Lesson> findByStudentIdAndDateRange(Long studentId, LocalDate startDate, LocalDate endDate) {
-        return List.of();
+        List<LessonStudentEntity> lessonStudents = lessonStudentMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<LessonStudentEntity>()
+                        .eq(LessonStudentEntity::getStudentId, studentId)
+        );
+        if (lessonStudents == null || lessonStudents.isEmpty()) {
+            return List.of();
+        }
+        List<Long> lessonIds = lessonStudents.stream()
+                .map(LessonStudentEntity::getLessonId)
+                .distinct()
+                .collect(Collectors.toList());
+        List<LessonEntity> lessons = lessonMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<LessonEntity>()
+                        .in(LessonEntity::getId, lessonIds)
+                        .ge(LessonEntity::getLessonDate, startDate)
+                        .le(LessonEntity::getLessonDate, endDate)
+                        .isNull(LessonEntity::getDeletedAt)
+                        .orderByDesc(LessonEntity::getLessonDate)
+        );
+        return lessons.stream().map(this::convertToDomain).collect(Collectors.toList());
     }
     
     @Override

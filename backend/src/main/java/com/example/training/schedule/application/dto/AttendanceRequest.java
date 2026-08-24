@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,4 +24,9 @@ public class AttendanceRequest {
     private String attendanceStatus;
     
     private String remark;
+
+    public Long getLessonId() { return lessonId; }    public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
+    public Long getStudentId() { return studentId; }    public void setStudentId(Long studentId) { this.studentId = studentId; }
+    public String getAttendanceStatus() { return attendanceStatus; }    public void setAttendanceStatus(String attendanceStatus) { this.attendanceStatus = attendanceStatus; }
+    public String getRemark() { return remark; }    public void setRemark(String remark) { this.remark = remark; }
 }

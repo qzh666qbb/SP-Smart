@@ -1,6 +1,8 @@
 package com.example.training.course.controller;
 
 import com.example.training.common.response.ApiResponse;
+import com.example.training.common.response.PageRequest;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
 import com.example.training.course.application.dto.ClassGroupCreateRequest;
 import com.example.training.course.application.dto.CourseCreateRequest;
@@ -33,8 +35,11 @@ public class CourseController {
     
     @GetMapping("/business/courses")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<List<CourseResponse>> listCourses() {
-        List<CourseResponse> response = courseApplicationService.getAllEnabledCourses();
+    public ApiResponse<PageResult<CourseResponse>> listCourses(
+            PageRequest pageRequest,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        PageResult<CourseResponse> response = courseApplicationService.listCoursesPage(
+                keyword, pageRequest.getPageNum(), pageRequest.getPageSize());
         return ApiResponse.success(response);
     }
     
@@ -59,6 +64,13 @@ public class CourseController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> disableCourse(@PathVariable Long id) {
         courseApplicationService.disableCourse(id);
+        return ApiResponse.success();
+    }
+
+    @DeleteMapping("/business/courses/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Void> deleteCourse(@PathVariable Long id) {
+        courseApplicationService.deleteCourse(id);
         return ApiResponse.success();
     }
     
@@ -91,7 +103,7 @@ public class CourseController {
             @PathVariable Long id,
             @Valid @RequestBody ClassGroupCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
-        ClassGroup response = courseApplicationService.getClassGroup(id);
+        ClassGroup response = courseApplicationService.updateClassGroup(id, request, currentUser);
         return ApiResponse.success(response);
     }
     
@@ -99,8 +111,9 @@ public class CourseController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> addStudentsToClassGroup(
             @PathVariable Long id,
-            @RequestBody List<Long> studentIds) {
-        courseApplicationService.addStudentsToClassGroup(id, studentIds);
+            @RequestBody List<Long> studentIds,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.training.common.security.CurrentUser currentUser) {
+        courseApplicationService.addStudentsToClassGroup(id, studentIds, currentUser);
         return ApiResponse.success();
     }
     

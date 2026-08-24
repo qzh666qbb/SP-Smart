@@ -1,7 +1,13 @@
 package com.example.training.hour.controller;
 
+import com.example.training.common.exception.BusinessException;
+import com.example.training.common.exception.ErrorCode;
 import com.example.training.common.response.ApiResponse;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
+import com.example.training.common.security.ParentPermissionService;
+import com.example.training.common.security.TeacherPermissionService;
+import com.example.training.hour.application.dto.HourAccountResponse;
 import com.example.training.hour.application.dto.HourRechargeRequest;
 import com.example.training.hour.application.dto.HourRefundRequest;
 import com.example.training.hour.application.service.HourApplicationService;
@@ -21,7 +27,19 @@ import java.util.List;
 public class HourController {
     
     private final HourApplicationService hourApplicationService;
-    
+    private final ParentPermissionService parentPermissionService;
+    private final TeacherPermissionService teacherPermissionService;
+
+    @GetMapping("/business/hours/accounts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ApiResponse<PageResult<HourAccountResponse>> listAccounts(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        PageResult<HourAccountResponse> response = hourApplicationService.listAccounts(keyword, pageNum, pageSize);
+        return ApiResponse.success(response);
+    }
+
     @PostMapping("/business/hours/recharge")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<StudentHourAccount> recharge(
@@ -51,28 +69,52 @@ public class HourController {
     
     @GetMapping("/business/hours/accounts/{studentId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<StudentHourAccount> getAccount(@PathVariable Long studentId) {
+    public ApiResponse<StudentHourAccount> getAccount(
+            @PathVariable Long studentId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("TEACHER".equals(currentUser.getRole())
+                && !teacherPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员课时信息");
+        }
         StudentHourAccount response = hourApplicationService.getAccount(studentId);
         return ApiResponse.success(response);
     }
     
     @GetMapping("/business/hours/transactions/{studentId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<List<HourTransaction>> getTransactions(@PathVariable Long studentId) {
+    public ApiResponse<List<HourTransaction>> getTransactions(
+            @PathVariable Long studentId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("TEACHER".equals(currentUser.getRole())
+                && !teacherPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员课时流水");
+        }
         List<HourTransaction> response = hourApplicationService.getTransactions(studentId);
         return ApiResponse.success(response);
     }
     
     @GetMapping("/parent/hours/accounts/{studentId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
-    public ApiResponse<StudentHourAccount> getParentAccount(@PathVariable Long studentId) {
+    public ApiResponse<StudentHourAccount> getParentAccount(
+            @PathVariable Long studentId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("PARENT".equals(currentUser.getRole())
+                && !parentPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员课时信息");
+        }
         StudentHourAccount response = hourApplicationService.getAccount(studentId);
         return ApiResponse.success(response);
     }
     
     @GetMapping("/parent/hours/transactions/{studentId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
-    public ApiResponse<List<HourTransaction>> getParentTransactions(@PathVariable Long studentId) {
+    public ApiResponse<List<HourTransaction>> getParentTransactions(
+            @PathVariable Long studentId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("PARENT".equals(currentUser.getRole())
+                && !parentPermissionService.canAccessStudent(currentUser, studentId)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员课时流水");
+        }
         List<HourTransaction> response = hourApplicationService.getTransactions(studentId);
         return ApiResponse.success(response);
     }

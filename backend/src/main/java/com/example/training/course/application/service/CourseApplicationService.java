@@ -2,6 +2,7 @@ package com.example.training.course.application.service;
 
 import com.example.training.common.exception.BusinessException;
 import com.example.training.common.exception.ErrorCode;
+import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
 import com.example.training.course.application.dto.ClassGroupCreateRequest;
 import com.example.training.course.application.dto.CourseCreateRequest;
@@ -11,9 +12,12 @@ import com.example.training.course.domain.model.Course;
 import com.example.training.course.domain.repository.CourseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +25,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class CourseApplicationService {
+    private static final Logger log = LoggerFactory.getLogger(CourseApplicationService.class);
+
     
     private final CourseRepository courseRepository;
     
@@ -53,18 +59,48 @@ public class CourseApplicationService {
     }
     
     public List<CourseResponse> getAllEnabledCourses() {
-        List<Course> courses = courseRepository.findAllEnabled();
-        return courses.stream().map(this::convertToResponse).collect(Collectors.toList());
+        return listCoursesPage(null, 1, Integer.MAX_VALUE).getList();
+    }
+
+    public PageResult<CourseResponse> listCoursesPage(String keyword, int pageNum, int pageSize) {
+        List<Course> all = courseRepository.findAllEnabled();
+        String kw = keyword == null ? null : keyword.trim().toLowerCase();
+        List<CourseResponse> filtered = all.stream()
+                .filter(c -> kw == null || kw.isEmpty()
+                        || contains(c.getCourseName(), kw)
+                        || contains(c.getCourseCode(), kw)
+                        || contains(c.getCourseType(), kw)
+                        || contains(c.getDescription(), kw)
+                        || contains(c.getStatus(), kw))
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+        int from = Math.max(0, (pageNum - 1) * pageSize);
+        int to = Math.min(from + pageSize, filtered.size());
+        List<CourseResponse> page = from >= filtered.size() ? new ArrayList<>() : new ArrayList<>(filtered.subList(from, to));
+        return PageResult.of(page, filtered.size(), pageNum, pageSize);
+    }
+
+    private static boolean contains(String src, String lowerKw) {
+        if (src == null || lowerKw == null) return false;
+        return src.toLowerCase().contains(lowerKw);
     }
     
     @Transactional
     public void disableCourse(Long id) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
-
         course.setStatus("DISABLED");
         courseRepository.save(course);
         log.info("禁用课程: id={}, code={}", id, course.getCourseCode());
+    }
+
+    @Transactional
+    public void deleteCourse(Long id) {
+        Course course = courseRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
+        course.setDeletedAt(java.time.LocalDateTime.now());
+        courseRepository.save(course);
+        log.info("删除课程: id={}, code={}", id, course.getCourseCode());
     }
 
     @Transactional
@@ -144,11 +180,31 @@ public class CourseApplicationService {
     }
     
     @Transactional
-    public void addStudentsToClassGroup(Long classGroupId, List<Long> studentIds) {
+    public ClassGroup updateClassGroup(Long id, ClassGroupCreateRequest request, CurrentUser currentUser) {
+        ClassGroup classGroup = courseRepository.findClassGroupById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CLASS_GROUP_NOT_FOUND));
+
+        if (request.getClassName() != null) classGroup.setClassName(request.getClassName());
+        if (request.getCourseId() != null) classGroup.setCourseId(request.getCourseId());
+        if (request.getPrimaryTeacherId() != null) classGroup.setPrimaryTeacherId(request.getPrimaryTeacherId());
+        if (request.getMaxStudents() != null) classGroup.setMaxStudents(request.getMaxStudents());
+        if (request.getStatus() != null) classGroup.setStatus(request.getStatus());
+        if (request.getStartDate() != null) classGroup.setStartDate(request.getStartDate());
+        if (request.getEndDate() != null) classGroup.setEndDate(request.getEndDate());
+        if (request.getRemark() != null) classGroup.setRemark(request.getRemark());
+        classGroup.setUpdatedBy(currentUser.getUserId());
+
+        ClassGroup saved = courseRepository.saveClassGroup(classGroup);
+        log.info("更新班级: id={}, name={}", id, saved.getClassName());
+        return saved;
+    }
+    
+    @Transactional
+    public void addStudentsToClassGroup(Long classGroupId, List<Long> studentIds, com.example.training.common.security.CurrentUser currentUser) {
         ClassGroup classGroup = courseRepository.findClassGroupById(classGroupId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CLASS_GROUP_NOT_FOUND));
         
-        courseRepository.addStudentsToClassGroup(classGroupId, studentIds);
+        courseRepository.addStudentsToClassGroup(classGroupId, studentIds, currentUser.getUserId());
         log.info("添加学员到班级: classGroupId={}, studentIds={}", classGroupId, studentIds);
     }
     

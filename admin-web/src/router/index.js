@@ -62,6 +62,18 @@ const routes = [
         name: 'HourManage',
         component: HourManage,
         meta: { title: '课时管理', icon: 'el-icon-clock' }
+      },
+      {
+        path: '/teacher/pre-register',
+        component: () => import('@/views/teacher/pre-register.vue'),
+        name: 'TeacherPreRegister',
+        meta: { title: '教师预登记', icon: 'UserFilled', roles: ['ADMIN'] }
+      },
+      {
+        path: '/teacher/apply-review',
+        component: () => import('@/views/teacher/apply-review.vue'),
+        name: 'TeacherApplyReview',
+        meta: { title: '教师申请审核', icon: 'CircleCheckFilled', roles: ['ADMIN'] }
       }
     ]
   }

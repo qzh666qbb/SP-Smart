@@ -25,4 +25,8 @@ public interface HourRepository {
     List<HourTransaction> findTransactionsByStudentId(Long studentId);
     
     List<HourTransaction> findTransactionsByType(String transactionType);
+
+    List<Object[]> listAccountsRaw(String keyword, int offset, int pageSize);
+
+    long countAccounts(String keyword);
 }

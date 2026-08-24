@@ -4,9 +4,11 @@ import styles from './index.module.scss';
 
 interface ButtonProps {
   children: React.ReactNode;
-  type?: 'primary' | 'secondary' | 'warning' | 'danger';
+  type?: 'primary' | 'secondary' | 'warning' | 'danger' | 'plain';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
+  loading?: boolean;
+  block?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -16,6 +18,8 @@ export default function CustomButton({
   type = 'primary', 
   size = 'md', 
   disabled = false,
+  loading = false,
+  block = false,
   onClick,
   className
 }: ButtonProps) {
@@ -25,20 +29,25 @@ export default function CustomButton({
     lg: styles.sizeLg
   };
   
-  const typeMap = {
+  const typeMap: Record<string, string> = {
     primary: styles.typePrimary,
     secondary: styles.typeSecondary,
     warning: styles.typeWarning,
-    danger: styles.typeDanger
+    danger: styles.typeDanger,
+    plain: styles.typePlain || ''
   };
+
+  const blockClass = block ? styles.block : '';
+  const isDisabled = disabled || loading;
   
   return (
     <Button
-      className={`${styles.button} ${sizeMap[size]} ${typeMap[type]} ${disabled ? styles.disabled : ''} ${className || ''}`}
-      disabled={disabled}
+      className={`${styles.button} ${sizeMap[size]} ${typeMap[type]} ${blockClass} ${isDisabled ? styles.disabled : ''} ${loading ? styles.loading : ''} ${className || ''}`}
+      disabled={isDisabled}
       onClick={onClick}
+      style={block ? { display: 'block', width: '100%' } : {}}
     >
-      {children}
+      {loading ? '加载中...' : children}
     </Button>
   );
 }

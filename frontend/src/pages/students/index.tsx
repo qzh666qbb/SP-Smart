@@ -1,85 +1,174 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { useState, useMemo } from 'react';
+import { View, Text, ScrollView, Picker, Textarea } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
-import Tag from '@/components/Tag';
-import { Student } from '@/types';
+import CustomButton from '@/components/Button';
+import Input from '@/components/Input/index';
+import { createChildByParent } from '@/services/api';
 import styles from './index.module.scss';
 
-const mockStudents: Student[] = [
-  { id: '1', name: '张三', age: 12, gender: 'MALE', studentNo: 'S001', parentName: '张父', parentPhone: '13800138001' },
-  { id: '2', name: '李四', age: 12, gender: 'FEMALE', studentNo: 'S002', parentName: '李母', parentPhone: '13800138002' },
-  { id: '3', name: '王五', age: 13, gender: 'MALE', studentNo: 'S003', parentName: '王父', parentPhone: '13800138003' },
-  { id: '4', name: '赵六', age: 12, gender: 'FEMALE', studentNo: 'S004', parentName: '赵母', parentPhone: '13800138004' },
-  { id: '5', name: '钱七', age: 13, gender: 'MALE', studentNo: 'S005', parentName: '钱父', parentPhone: '13800138005' },
-  { id: '6', name: '孙八', age: 12, gender: 'FEMALE', studentNo: 'S006', parentName: '孙母', parentPhone: '13800138006' },
-];
+type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN';
+
+const GENDER_LABELS: Record<Gender, string> = {
+  MALE: '男',
+  FEMALE: '女',
+  UNKNOWN: '其他',
+};
 
 export default function StudentsPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [gender, setGender] = useState<Gender>('MALE');
+  const [birthDate, setBirthDate] = useState('');
+  const [phone, setPhone] = useState('');
+  const [medicalNotes, setMedicalNotes] = useState('');
+  const [remark, setRemark] = useState('');
 
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const fetchStudents = async () => {
+  const handleSave = async () => {
+    if (!name.trim()) {
+      return Taro.showToast({ title: '请输入孩子姓名', icon: 'none' });
+    }
+    if (phone && !/^1[3-9]\d{9}$/.test(phone)) {
+      return Taro.showToast({ title: '孩子手机号格式不正确', icon: 'none' });
+    }
     setIsLoading(true);
     try {
-      setStudents(mockStudents);
-    } catch (err) {
-      console.error('[StudentsPage]', err);
+      const res = await createChildByParent({
+        name: name.trim(),
+        gender,
+        birthDate: birthDate || undefined,
+        phone: phone || undefined,
+        medicalNotes: medicalNotes.trim() || undefined,
+        remark: remark.trim() || undefined,
+      });
+      Taro.showToast({
+        title: '保存成功',
+        icon: 'success',
+        duration: 1500,
+      });
+      setTimeout(() => {
+        Taro.reLaunch({
+          url: '/pages/parent-children/index',
+        }).catch(() => {
+          Taro.reLaunch({ url: '/pages/parent-home/index' });
+        });
+      }, 1200);
+      // 保存返回的学号等信息，便于调试/观察
+      console.log('[录入孩子] saved student:', res);
+    } catch (err: any) {
+      Taro.showToast({
+        title: err?.message || '保存失败，请稍后重试',
+        icon: 'none',
+        duration: 2500,
+      });
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleStudentClick = (student: Student) => {
-    Taro.navigateTo({ url: `/pages/student-detail/index?id=${student.id}` });
   };
 
   return (
     <ScrollView className={styles.studentsPage} scrollY>
       <View className={styles.container}>
         <View className={styles.header}>
-          <Text className={styles.pageTitle}>学员列表</Text>
-          <Text className={styles.pageCount}>{students.length}名学员</Text>
+          <Text className={styles.pageTitle}>录入自己孩子信息</Text>
+          <Text className={styles.pageHint}>
+            学号将由系统自动生成，保存后可在"我的孩子"中查看
+          </Text>
         </View>
 
-        {isLoading ? (
-          <View className={styles.loading}>
-            <Text>加载中...</Text>
+        <Card className={styles.formCard}>
+          <Text className={styles.hint}>
+            请如实填写孩子的基本资料，保存成功后会自动与您的家长账号绑定。
+          </Text>
+
+          <View className={styles.field}>
+            <Text className={styles.fieldLabel}>孩子姓名 *</Text>
+            <Input
+              placeholder="请输入孩子真实姓名"
+              value={name}
+              onChange={(val) => setName(typeof val === 'string' ? val : String(val ?? ''))}
+            />
           </View>
-        ) : students.length === 0 ? (
-          <Card className={styles.emptyCard}>
-            <Text className={styles.emptyText}>暂无学员</Text>
-          </Card>
-        ) : (
-          students.map(student => (
-            <Card key={student.id} className={styles.studentCard} onClick={() => handleStudentClick(student)}>
-              <View className={styles.studentHeader}>
-                <View className={styles.studentAvatar}>
-                  <Text className={styles.avatarText}>{student.name[0]}</Text>
+
+          <View className={styles.field}>
+            <Text className={styles.fieldLabel}>性别 *</Text>
+            <View className={styles.relationRow}>
+              {(['MALE', 'FEMALE', 'UNKNOWN'] as Gender[]).map((k) => (
+                <View
+                  key={k}
+                  className={`${styles.relationChip} ${gender === k ? styles.active : ''}`}
+                  onClick={() => setGender(k)}
+                >
+                  <Text>{GENDER_LABELS[k]}</Text>
                 </View>
-                <View className={styles.studentInfo}>
-                  <View className={styles.studentNameRow}>
-                    <Text className={styles.studentName}>{student.name}</Text>
-                    {student.gender === 'MALE' && <Tag type="primary">男</Tag>}
-                    {student.gender === 'FEMALE' && <Tag type="success">女</Tag>}
-                  </View>
-                  <Text className={styles.studentNo}>学号: {student.studentNo}</Text>
-                  {student.age && <Text className={styles.studentAge}>{student.age}岁</Text>}
-                </View>
+              ))}
+            </View>
+          </View>
+
+          <View className={styles.field}>
+            <Text className={styles.fieldLabel}>出生日期</Text>
+            <Picker
+              mode="date"
+              value={birthDate}
+              end={todayStr}
+              onChange={(e: any) => setBirthDate(e?.detail?.value || '')}
+            >
+              <View className={styles.pickerBox}>
+                <Text className={birthDate ? '' : styles.placeholderText}>
+                  {birthDate || '请选择出生日期'}
+                </Text>
               </View>
-              <View className={styles.parentInfo}>
-                <Text className={styles.parentLabel}>家长:</Text>
-                <Text className={styles.parentName}>{student.parentName || '未填写'}</Text>
-                <Text className={styles.parentPhone}>{student.parentPhone || '未填写'}</Text>
-              </View>
-              <Text className={styles.arrow}>›</Text>
-            </Card>
-          ))
-        )}
+            </Picker>
+          </View>
+
+          <View className={styles.field}>
+            <Text className={styles.fieldLabel}>孩子本人手机号（选填）</Text>
+            <Input
+              type="number"
+              placeholder="孩子如有常用手机号可填写"
+              value={phone}
+              onChange={(val) => setPhone(typeof val === 'string' ? val : String(val ?? ''))}
+            />
+          </View>
+
+          <View className={styles.field}>
+            <Text className={styles.fieldLabel}>医疗 / 过敏备注</Text>
+            <View className={styles.textareaWrap}>
+              <Textarea
+                className={styles.textarea}
+                placeholder="如：花生过敏、哮喘、心脏病、药物禁忌等"
+                value={medicalNotes}
+                onInput={(e: any) => setMedicalNotes(e?.detail?.value ?? '')}
+                maxlength={200}
+              />
+            </View>
+          </View>
+
+          <View className={styles.field}>
+            <Text className={styles.fieldLabel}>备注</Text>
+            <View className={styles.textareaWrap}>
+              <Textarea
+                className={styles.textarea}
+                placeholder="其他需要老师了解的信息（选填）"
+                value={remark}
+                onInput={(e: any) => setRemark(e?.detail?.value ?? '')}
+                maxlength={200}
+              />
+            </View>
+          </View>
+
+          <CustomButton
+            type="primary"
+            block
+            loading={isLoading}
+            onClick={handleSave}
+            className={styles.submitBtn}
+          >
+            保存孩子资料
+          </CustomButton>
+        </Card>
       </View>
     </ScrollView>
   );

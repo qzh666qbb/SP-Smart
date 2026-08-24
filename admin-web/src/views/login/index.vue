@@ -9,14 +9,14 @@
             <el-icon-s-home />
           </el-icon>
         </div>
-        <h1 class="title">体测管理系统</h1>
+        <h1 class="title">管理系统</h1>
         <p class="subtitle">管理员后台管理系统</p>
       </div>
       <el-form :model="form" :rules="rules" ref="formRef" class="login-form">
         <el-form-item prop="username">
           <el-input 
             v-model="form.username" 
-            placeholder="请输入用户名" 
+            placeholder="请输入用户名（管理员 admin）" 
             size="large"
             class="custom-input"
           />
@@ -25,17 +25,11 @@
           <el-input 
             v-model="form.password" 
             type="password" 
-            placeholder="请输入密码" 
+            placeholder="请输入密码（默认 123456）" 
             size="large"
             show-password
             class="custom-input"
           />
-        </el-form-item>
-        <el-form-item prop="role">
-          <el-select v-model="form.role" placeholder="请选择角色" size="large" class="custom-select">
-            <el-option label="管理员" value="ADMIN" />
-            <el-option label="教师" value="TEACHER" />
-          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" size="large" class="login-btn" @click="handleLogin" :loading="loading">
@@ -49,6 +43,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { login } from '@/api'
 
@@ -58,8 +53,7 @@ const loading = ref(false)
 
 const form = reactive({
   username: '',
-  password: '',
-  role: 'ADMIN'
+  password: ''
 })
 
 const rules = {
@@ -68,9 +62,6 @@ const rules = {
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' }
-  ],
-  role: [
-    { required: true, message: '请选择角色', trigger: 'change' }
   ]
 }
 
@@ -85,7 +76,7 @@ const handleLogin = async () => {
       router.push('/dashboard')
     } catch (err) {
       console.error(err)
-      alert('登录失败，请检查账号密码')
+      ElMessage.error('登录失败，请检查账号密码')
     } finally {
       loading.value = false
     }
