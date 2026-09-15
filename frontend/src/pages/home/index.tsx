@@ -11,7 +11,10 @@ import { notifyTabBarActive } from '@/utils/tabbar';
 import styles from './index.module.scss';
 
 interface CalendarDay {
-  date: Date;
+  dateStr: string;
+  dayNumber: number;
+  year: number;
+  month: number;
   isCurrentMonth: boolean;
   isToday: boolean;
   isSelected: boolean;
@@ -57,7 +60,18 @@ export default function HomePage() {
 
     for (let i = firstDay.getDay(); i > 0; i--) {
       const date = new Date(year, month, -i + 1);
-      days.push({ date, isCurrentMonth: false, isToday: false, isSelected: false, hasCourse: false, courseCount: 0 });
+      const dateStr = formatDate(date);
+      days.push({
+        dateStr,
+        dayNumber: date.getDate(),
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        isCurrentMonth: false,
+        isToday: false,
+        isSelected: dateStr === selectedDate,
+        hasCourse: getCoursesForDate(dateStr).length > 0,
+        courseCount: getCoursesForDate(dateStr).length
+      });
     }
 
     for (let i = 1; i <= lastDay.getDate(); i++) {
@@ -68,7 +82,10 @@ export default function HomePage() {
       const isSelected = dateStr === selectedDate;
       const dayCourses = getCoursesForDate(dateStr);
       days.push({ 
-        date, 
+        dateStr,
+        dayNumber: date.getDate(),
+        year: date.getFullYear(),
+        month: date.getMonth(),
         isCurrentMonth: true, 
         isToday, 
         isSelected, 
@@ -80,14 +97,28 @@ export default function HomePage() {
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       const date = new Date(year, month + 1, i);
-      days.push({ date, isCurrentMonth: false, isToday: false, isSelected: false, hasCourse: false, courseCount: 0 });
+      const dateStr = formatDate(date);
+      days.push({
+        dateStr,
+        dayNumber: date.getDate(),
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        isCurrentMonth: false,
+        isToday: false,
+        isSelected: dateStr === selectedDate,
+        hasCourse: getCoursesForDate(dateStr).length > 0,
+        courseCount: getCoursesForDate(dateStr).length
+      });
     }
 
     return days;
   };
 
-  const handleDateClick = (date: Date) => {
-    setSelectedDate(formatDate(date));
+  const handleDateClick = (item: CalendarDay) => {
+    setSelectedDate(item.dateStr);
+    if (!item.isCurrentMonth) {
+      setCurrentMonth(new Date(item.year, item.month, 1));
+    }
   };
 
   const handlePrevMonth = () => {
@@ -132,13 +163,14 @@ export default function HomePage() {
         </View>
 
         <View className={styles.calendarGrid}>
-          {generateCalendarDays().map((item, index) => (
+          {generateCalendarDays().map(item => (
             <View 
-              key={index}
+              key={item.dateStr}
               className={`${styles.day} ${!item.isCurrentMonth ? styles.otherMonth : ''} ${item.isToday ? styles.today : ''} ${item.isSelected ? styles.selected : ''}`}
-              onClick={() => item.isCurrentMonth && handleDateClick(item.date)}
+              hoverClass={styles.dayHover}
+              onClick={() => handleDateClick(item)}
             >
-              <Text className={styles.dayText}>{item.date.getDate()}</Text>
+              <Text className={styles.dayText}>{item.dayNumber}</Text>
               {item.hasCourse && (
                 <View className={styles.courseDot} />
               )}

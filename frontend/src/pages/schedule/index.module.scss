@@ -168,6 +168,7 @@
   
   .modalBody {
     flex: 1;
+    min-height: 0;
     padding: $spacing-md;
     overflow: hidden;
     
@@ -265,8 +266,12 @@
   
   .modalFooter {
     display: flex;
+    flex-shrink: 0;
     gap: $spacing-md;
-    padding: $spacing-lg;
+    // The custom tab bar occupies 100rpx and can sit above page-level fixed
+    // elements in mini programs. Keep the actions clear of it and the device
+    // home indicator.
+    padding: $spacing-lg $spacing-lg calc($spacing-lg + 100rpx + env(safe-area-inset-bottom));
     border-top: 1rpx solid $color-divider;
     
     button {
