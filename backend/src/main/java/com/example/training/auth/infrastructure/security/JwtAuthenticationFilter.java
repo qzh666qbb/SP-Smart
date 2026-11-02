@@ -49,13 +49,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     return;
                 }
                 
-                String phone = jwtService.extractPhone(jwt);
+                String phone = databaseUser.getPhone();
+                username = databaseUser.getUsername();
                 Long profileId = jwtService.extractProfileId(jwt);
                 String profileType = jwtService.extractProfileType(jwt);
                 if ("TEACHER".equals(role)) {
                     profileId = userRepository.findTeacherProfileByUserId(userId)
                             .map(com.example.training.auth.domain.model.TeacherProfile::getId).orElse(null);
                     profileType = "TEACHER";
+                } else if ("PARENT".equals(role)) {
+                    profileId = userRepository.findParentProfileByUserId(userId)
+                            .map(com.example.training.auth.domain.model.ParentProfile::getId).orElse(null);
+                    profileType = "PARENT";
                 }
 
                 CurrentUser currentUser = CurrentUser.builder()

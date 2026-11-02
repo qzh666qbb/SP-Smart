@@ -301,10 +301,71 @@ class ScheduleApplicationServiceTest {
         request.setStartDate(date);
         service.updateSchedule(301L, request, CurrentUser.builder().role("ADMIN").userId(1L).build());
         verify(scheduleRepository).replaceScheduleSeriesStudents(301L, List.of(102L), 1L);
-        verify(scheduleRepository).softDeletePendingLessonsBySeries(301L, date);
+        verify(scheduleRepository).findSeriesLessonsForUpdate(301L, LocalDate.now());
         ArgumentCaptor<LessonStudent> students = ArgumentCaptor.forClass(LessonStudent.class);
         verify(scheduleRepository).saveLessonStudent(students.capture());
         assertEquals(102L, students.getValue().getStudentId());
+    }
+
+    @Test
+    void singleLessonKeepsIdWhenTimeDateAndRosterChange() {
+        LocalDate date = LocalDate.now().plusDays(7);
+        ScheduleSeries series = ScheduleSeries.builder().id(301L).teacherId(21L).courseId(1L)
+                .recurrenceType("NONE").startDate(date).startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 0)).consumeHours(BigDecimal.ONE).build();
+        Lesson old = Lesson.builder().id(401L).scheduleSeriesId(301L).lessonDate(date)
+                .status("PENDING").version(2).build();
+        when(scheduleRepository.findScheduleSeriesById(301L)).thenReturn(Optional.of(series));
+        when(scheduleRepository.saveScheduleSeries(any())).thenAnswer(i -> i.getArgument(0));
+        when(scheduleRepository.findSeriesLessonsForUpdate(301L, LocalDate.now())).thenReturn(List.of(old));
+        ScheduleCreateRequest request = request(List.of(102L));
+        request.setTeacherId(21L);
+        request.setStartDate(date.plusDays(1));
+        service.updateSchedule(301L, request, CurrentUser.builder().role("ADMIN").userId(1L).build());
+        ArgumentCaptor<Lesson> lesson = ArgumentCaptor.forClass(Lesson.class);
+        verify(scheduleRepository).updatePendingLesson(lesson.capture(), org.mockito.ArgumentMatchers.eq(List.of(102L)));
+        assertEquals(401L, lesson.getValue().getId());
+        assertEquals(date.plusDays(1), lesson.getValue().getLessonDate());
+        verify(scheduleRepository, never()).saveLesson(any());
+        verify(scheduleRepository, never()).softDeletePendingLessonsBySeries(any(), any());
+    }
+
+    @Test
+    void completedLessonIsNotRecreatedOrOverwritten() {
+        LocalDate date = LocalDate.now();
+        ScheduleSeries series = ScheduleSeries.builder().id(301L).teacherId(21L).courseId(1L)
+                .recurrenceType("NONE").startDate(date).startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 0)).consumeHours(BigDecimal.ONE).build();
+        when(scheduleRepository.findScheduleSeriesById(301L)).thenReturn(Optional.of(series));
+        when(scheduleRepository.saveScheduleSeries(any())).thenAnswer(i -> i.getArgument(0));
+        when(scheduleRepository.findSeriesLessonsForUpdate(301L, date)).thenReturn(List.of(
+                Lesson.builder().id(401L).lessonDate(date).status("COMPLETED").build()));
+        ScheduleCreateRequest request = request(List.of(102L));
+        request.setTeacherId(21L); request.setStartDate(date);
+        service.updateSchedule(301L, request, CurrentUser.builder().role("ADMIN").userId(1L).build());
+        verify(scheduleRepository, never()).updatePendingLesson(any(), any());
+        verify(scheduleRepository, never()).saveLesson(any());
+    }
+
+    @Test
+    void scheduleAdjustedCancellationRestoresOriginalLessonId() {
+        LocalDate date = LocalDate.now().plusDays(7);
+        ScheduleSeries series = ScheduleSeries.builder().id(301L).teacherId(21L).courseId(1L)
+                .recurrenceType("NONE").startDate(date).startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 0)).consumeHours(BigDecimal.ONE).build();
+        Lesson old = Lesson.builder().id(401L).lessonDate(date).status("CANCELLED")
+                .cancelReason("排课计划已调整，请查看最新课表").version(2).build();
+        when(scheduleRepository.findScheduleSeriesById(301L)).thenReturn(Optional.of(series));
+        when(scheduleRepository.saveScheduleSeries(any())).thenAnswer(i -> i.getArgument(0));
+        when(scheduleRepository.findSeriesLessonsForUpdate(301L, LocalDate.now())).thenReturn(List.of(old));
+        when(scheduleRepository.saveLesson(any())).thenAnswer(i -> i.getArgument(0));
+        ScheduleCreateRequest request = request(List.of(102L));
+        request.setTeacherId(21L); request.setStartDate(date);
+        service.updateSchedule(301L, request, CurrentUser.builder().role("ADMIN").userId(1L).build());
+        ArgumentCaptor<Lesson> lesson = ArgumentCaptor.forClass(Lesson.class);
+        verify(scheduleRepository).updatePendingLesson(lesson.capture(), org.mockito.ArgumentMatchers.eq(List.of(102L)));
+        assertEquals(401L, lesson.getValue().getId());
+        assertEquals("PENDING", old.getStatus());
     }
 
     private ScheduleCreateRequest request(List<Long> studentIds) {

@@ -80,4 +80,13 @@ class AuthenticationControllerWechatLoginWebTest {
 
         verifyNoInteractions(authenticationService);
     }
+    @Test
+    void oldClientCanSubmitOpaqueTicketWithoutRole() throws Exception {
+        String ticket = "compat_0123456789abcdef0123456789abcdef";
+        org.mockito.Mockito.when(authenticationService.loginByWechat(ticket, "TEACHER", null, null))
+                .thenReturn(java.util.Map.of("accessToken", "verified-token"));
+        mockMvc.perform(post("/api/auth/login/wechat").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"openid\":\"" + ticket + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.accessToken").value("verified-token"));
+    }
 }

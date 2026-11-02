@@ -198,7 +198,7 @@ public class PhysicalTestApplicationService {
         int ps = Math.min(500, Math.max(1, pageSize));
         List<PhysicalTestRecord> all = physicalTestRepository.findByTesterId(testerId).stream()
                 .filter(record -> teacherProfileId == null
-                        || studentRepository.existsByTeacherAndStudentId(teacherProfileId, record.getStudentId()))
+                        || studentRepository.canTeacherAccessStudent(teacherProfileId, record.getStudentId()))
                 .toList();
         String kw = keyword == null ? null : keyword.trim().toLowerCase();
         java.util.Set<Long> matchedStudentIds = null;
@@ -350,6 +350,16 @@ public class PhysicalTestApplicationService {
             }
         }
         return student;
+    }
+
+    public Long resolveLegacyBatchId() {
+        PhysicalTestBatch original = physicalTestRepository.findBatchById(1L).orElse(null);
+        if (original != null && ("PENDING".equals(original.getStatus()) || "IN_PROGRESS".equals(original.getStatus()))) return 1L;
+        List<PhysicalTestBatch> available = physicalTestRepository.findAvailableBatches();
+        if (available.size() == 1) return available.get(0).getId();
+        throw new BusinessException(ErrorCode.PARAM_VALID_ERROR,
+                available.isEmpty() ? "暂无可用体测批次，请联系管理员"
+                        : "旧版无法选择体测批次，请更新小程序后选择本次批次");
     }
 
     private void requireAvailableBatch(Long batchId) {

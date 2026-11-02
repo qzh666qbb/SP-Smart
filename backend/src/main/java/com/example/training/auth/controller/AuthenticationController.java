@@ -39,6 +39,14 @@ public class AuthenticationController {
         return ApiResponse.success(result);
     }
 
+    public record LegacyWechatExchangeRequest(@jakarta.validation.constraints.NotBlank String code) {}
+
+    @PostMapping("/wechat/exchange")
+    public ApiResponse<Map<String, String>> exchangeLegacyWechatCode(
+            @Valid @RequestBody LegacyWechatExchangeRequest request) {
+        return ApiResponse.success(authenticationService.exchangeLegacyWechatCode(request.code()));
+    }
+
     @PostMapping("/login/wechat")
     public ApiResponse<Map<String, Object>> loginByWechat(@Valid @RequestBody WechatLoginRequest request) {
         Map<String, Object> result = authenticationService.loginByWechat(

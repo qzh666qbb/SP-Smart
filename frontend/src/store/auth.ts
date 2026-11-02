@@ -20,6 +20,7 @@ interface AuthState {
   hydrate: () => void;
   login: (token: string, user: User, profile: TeacherProfile | ParentProfile | null, refreshToken?: string | null) => void;
   logout: () => void;
+  syncIdentity: (user: User, profile: TeacherProfile | ParentProfile | null) => void;
   setProfile: (profile: TeacherProfile | ParentProfile | null) => void;
   setValidated: (validated: boolean) => void;
 }
@@ -60,6 +61,14 @@ const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     clearAuthStorage();
     set({ token: null, refreshToken: null, user: null, profile: null, isLoggedIn: false, isValidated: true, sessionVersion: get().sessionVersion + 1 });
+  },
+
+  syncIdentity: (user, profile) => {
+    const previous = get();
+    setStoredUser(user);
+    setStoredProfile(profile);
+    set({ user, profile, isValidated: true,
+      sessionVersion: previous.sessionVersion + (previous.user?.id !== user.id || previous.user?.role !== user.role ? 1 : 0) });
   },
 
   setProfile: (profile) => {

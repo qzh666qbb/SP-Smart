@@ -174,6 +174,8 @@ function deferred() {
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 function appHarness() {
+  let onShow;
+  let requests = 0;
   const pending = deferred();
   const storage = {
     getStoredToken: () => 'old-token',
@@ -187,15 +189,15 @@ function appHarness() {
     zustand: require('zustand'), '@/utils/request': storage,
   }).default;
   const App = loadModule('src/app.tsx', {
-    react: { useEffect: (effect) => effect() },
-    '@tarojs/taro': { useDidShow() {}, useDidHide() {} },
-    '@/services/api': { getCurrentUser: () => pending.promise },
+    react: { useEffect: (effect) => effect(), useRef: (value) => ({ current: value }) },
+    '@tarojs/taro': { useDidShow(fn) { onShow = fn; }, useDidHide() {} },
+    '@/services/api': { getCurrentUser: () => { requests++; return pending.promise; } },
     '@/store/auth': { __esModule: true, default: store },
     '@/utils/profile': { mergeProfile: (_, incoming) => incoming },
     './app.scss': {},
   }).default;
   App({ children: null });
-  return { store, pending };
+  return { store, pending, show: () => onShow(), get requests() { return requests; } };
 }
 
 test('退出后忽略尚未完成的启动校验响应', async () => {
@@ -555,5 +557,84 @@ for (const role of ['PARENT', 'TEACHER']) {
     assert.ok(output.includes('下周课程'));
     assert.ok(!output.includes('过期课程'));
     assert.ok(!output.includes('确认排课'));
+  });
+}
+
+for (const page of ['parent-home', 'parent-course']) {
+  test(`${page}返回页面重新获取孩子名单，忽略先前请求`, async () => {
+    const first = deferred();
+    let calls = 0;
+    const h = pageHarness(`src/pages/${page}/index.tsx`, {
+      [page === 'parent-home' ? 'listParentChildren' : 'getParentStudents']: () => ++calls === 1 ? first.promise : Promise.resolve([{ id: 'new', name: '最新孩子' }]),
+      getLessons: async () => [],
+    }, { '@/store/auth': { __esModule: true, default: () => ({ user: { id: 'parent', role: 'PARENT' }, profile: null }) } });
+    h.render();
+    h.show();
+    await flush();
+    first.resolve([{ id: 'old', name: '过期孩子' }]);
+    await flush();
+    const tree = JSON.stringify(h.render());
+    assert.equal(calls, 2);
+    assert.ok(tree.includes('最新孩子'));
+    assert.ok(!tree.includes('过期孩子'));
+  });
+}
+
+test('课程详情按ID获取，返回页面重新获取课程', async () => {
+  let calls = 0;
+  let show;
+  const h = pageHarness('src/pages/course-detail/index.tsx', {
+    getLessonDetail: async (id) => { assert.equal(id, '123'); calls++; return { id, status: 'PENDING', courseName: '新课程' }; },
+    getLessonAttendance: async () => [],
+  }, {
+    '@tarojs/taro': { useDidShow: fn => { show = fn; }, getCurrentInstance: () => ({ router: { params: { id: '123' } } }) },
+    '@/utils/format': { formatDate: value => value, formatTime: value => value },
+  });
+  h.render();
+  await flush();
+  assert.ok(JSON.stringify(h.render()).includes('新课程'));
+  show();
+  await flush();
+  assert.equal(calls, 2);
+});
+
+test('请求携带客户端版本，区分新版主动选择批次和旧版默认批次', async () => {
+  const h = requestHarness(() => ({ code: 0, data: [] }));
+  await h.request('/business/example');
+  assert.equal(h.calls[0].header['X-Client-Version'], '20261102');
+});
+
+test('家长课程页请求失败显示重试，不误报没有孩子', async () => {
+  const h = pageHarness('src/pages/parent-course/index.tsx', {
+    getParentStudents: async () => { throw new Error('offline'); },
+  });
+  h.render();
+  await flush();
+  const tree = JSON.stringify(h.render());
+  assert.ok(tree.includes('课程加载失败，点击重试'));
+  assert.ok(!tree.includes('暂无孩子资料'));
+});
+
+test('小程序回到前台重新同步身份，角色不变时保留会话版本', async () => {
+  const h = appHarness();
+  const version = h.store.getState().sessionVersion;
+  h.show();
+  assert.equal(h.requests, 2);
+  h.pending.resolve({ user: { id: 'old-user', role: 'TEACHER', name: '最新姓名' }, profile: null });
+  await flush();
+  assert.equal(h.store.getState().user.name, '最新姓名');
+  assert.equal(h.store.getState().sessionVersion, version);
+});
+
+for (const role of ['TEACHER', 'PARENT']) {
+  test(`${role}已登录但资料为空时个人页正常显示`, () => {
+    const h = pageHarness('src/pages/mine/index.tsx', {}, {
+      '@/store/auth': { __esModule: true, default: () => ({ user: { id: '1', role, name: '测试用户' }, profile: null, isLoggedIn: true }) },
+      '@/utils/profile': { mergeProfile: (_, value) => value },
+      '@/assets/tabbar/mine-selected.png': 'mine.png',
+      '@/assets/tabbar/schedule-selected.png': 'schedule.png',
+      '@/assets/tabbar/physical-selected.png': 'physical.png',
+    });
+    assert.doesNotThrow(() => h.render());
   });
 }

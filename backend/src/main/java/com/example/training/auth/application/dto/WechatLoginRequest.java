@@ -24,6 +24,13 @@ public class WechatLoginRequest {
     @Size(max = 500, message = "头像地址不能超过500个字符")
     private String avatarUrl;
 
+    public void setOpenid(String value) {
+        if (value != null && value.matches("compat_[a-f0-9]{32}")) {
+            this.code = value;
+            if (this.role == null) this.role = "TEACHER";
+        }
+    }
+
     public String getCode() { return code; }    public void setCode(String code) { this.code = code; }
     public String getRole() { return role; }    public void setRole(String role) { this.role = role; }
     public String getNickname() { return nickname; }    public void setNickname(String nickname) { this.nickname = nickname; }

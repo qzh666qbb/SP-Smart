@@ -162,10 +162,9 @@ public class ScheduleController {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期和结束日期必须同时提供");
         }
         if (startDate == null) {
-            // 兼容未传日期的旧版日历客户端，返回当月完整的六周视图。
-            LocalDate firstDay = LocalDate.now().withDayOfMonth(1);
-            startDate = firstDay.minusDays(firstDay.getDayOfWeek().getValue() % 7);
-            endDate = startDate.plusDays(41);
+            // 旧版只加载一次且翻月不传范围；保留前一年至后一年的兼容窗口。
+            startDate = LocalDate.now().minusYears(1).withDayOfYear(1);
+            endDate = LocalDate.now().plusYears(1).withMonth(12).withDayOfMonth(31);
         } else if (startDate.isAfter(endDate)) {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期不能晚于结束日期");
         }
@@ -173,6 +172,13 @@ public class ScheduleController {
         return ApiResponse.success(response);
     }
     
+    @GetMapping("/business/lessons/{lessonId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ApiResponse<Lesson> getLessonDetail(@PathVariable Long lessonId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        return ApiResponse.success(scheduleApplicationService.getLessonDetail(lessonId, currentUser));
+    }
+
     @GetMapping("/business/lessons/{lessonId}/attendance")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ApiResponse<List<LessonStudent>> getLessonAttendance(

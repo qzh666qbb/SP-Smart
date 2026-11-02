@@ -313,6 +313,10 @@ export const getCurrentUser = async (): Promise<{ user: User; profile: TeacherPr
   }, undefined);
 };
 
+export const getLessonDetail = async (lessonId: string): Promise<Lesson> => {
+  return toLesson(await get<AnyMap>(`/business/lessons/${lessonId}`));
+};
+
 export const getSchedules = async (params?: { date?: string; startDate?: string; endDate?: string }): Promise<Lesson[]> => {
   return callWithFallback(async () => {
     const q: AnyMap = {};

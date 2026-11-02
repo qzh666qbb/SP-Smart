@@ -23,7 +23,7 @@ public class StudentRepositoryImpl implements StudentRepository {
 
     private final StudentMapper studentMapper;
     private final ParentStudentRelationMapper relationMapper;
-    
+
     @Override
     public Student save(Student student) {
         StudentEntity entity = convertToEntity(student);
@@ -34,13 +34,13 @@ public class StudentRepositoryImpl implements StudentRepository {
         }
         return convertToDomain(entity);
     }
-    
+
     @Override
     public Optional<Student> findById(Long id) {
         StudentEntity entity = studentMapper.selectById(id);
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
-    
+
     @Override
     public Optional<Student> findByStudentNo(String studentNo) {
         StudentEntity entity = studentMapper.selectOne(
@@ -50,7 +50,7 @@ public class StudentRepositoryImpl implements StudentRepository {
         );
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
-    
+
     @Override
     public List<Student> findAll() {
         List<StudentEntity> entities = studentMapper.selectList(
@@ -63,13 +63,15 @@ public class StudentRepositoryImpl implements StudentRepository {
 
     @Override
     public List<Student> findByTeacherId(Long teacherId) {
-        List<StudentEntity> entities = studentMapper.selectList(
-                new LambdaQueryWrapper<StudentEntity>()
-                        .eq(StudentEntity::getPrimaryTeacherId, teacherId)
-                        .isNull(StudentEntity::getDeletedAt)
-                        .orderByDesc(StudentEntity::getId)
-        );
-        return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
+        if (teacherId == null) return List.of();
+        return studentMapper.selectAccessibleStudents(teacherId).stream()
+                .map(this::convertToDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean canTeacherAccessStudent(Long teacherId, Long studentId) {
+        return teacherId != null && studentId != null
+                && studentMapper.countAccessibleStudent(teacherId, studentId) > 0;
     }
 
     @Override
@@ -105,7 +107,7 @@ public class StudentRepositoryImpl implements StudentRepository {
         StudentEntity entity = studentMapper.selectOne(q);
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
-    
+
     @Override
     public List<Student> findByParentId(Long parentProfileId) {
         if (parentProfileId == null) return Collections.emptyList();
@@ -121,7 +123,7 @@ public class StudentRepositoryImpl implements StudentRepository {
                 .map(this::convertToDomain)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public ParentStudentRelation saveRelation(ParentStudentRelation relation) {
         ParentStudentRelationEntity entity = convertToEntity(relation);
@@ -132,7 +134,7 @@ public class StudentRepositoryImpl implements StudentRepository {
         }
         return convertToDomain(entity);
     }
-    
+
     @Override
     public Optional<ParentStudentRelation> findRelation(Long parentId, Long studentId) {
         ParentStudentRelationEntity entity = relationMapper.selectOne(
@@ -157,12 +159,12 @@ public class StudentRepositoryImpl implements StudentRepository {
         );
         return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
     }
-    
+
     @Override
     public void deleteRelation(Long id) {
         relationMapper.deleteById(id);
     }
-    
+
     private StudentEntity convertToEntity(Student student) {
         return StudentEntity.builder()
                 .id(student.getId())
@@ -186,7 +188,7 @@ public class StudentRepositoryImpl implements StudentRepository {
                 .deletedAt(student.getDeletedAt())
                 .build();
     }
-    
+
     private Student convertToDomain(StudentEntity entity) {
         return Student.builder()
                 .id(entity.getId())
@@ -210,7 +212,7 @@ public class StudentRepositoryImpl implements StudentRepository {
                 .deletedAt(entity.getDeletedAt())
                 .build();
     }
-    
+
     private ParentStudentRelationEntity convertToEntity(ParentStudentRelation relation) {
         return ParentStudentRelationEntity.builder()
                 .id(relation.getId())
@@ -225,7 +227,7 @@ public class StudentRepositoryImpl implements StudentRepository {
                 .updatedAt(relation.getUpdatedAt())
                 .build();
     }
-    
+
     private ParentStudentRelation convertToDomain(ParentStudentRelationEntity entity) {
         return ParentStudentRelation.builder()
                 .id(entity.getId())

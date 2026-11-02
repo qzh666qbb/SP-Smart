@@ -49,6 +49,10 @@ public interface ScheduleRepository {
     
     void deleteScheduleSeries(Long id);
 
+    List<Lesson> findSeriesLessonsForUpdate(Long seriesId, LocalDate fromDate);
+
+    void updatePendingLesson(Lesson lesson, List<Long> studentIds);
+
     void softDeletePendingLessonsBySeries(Long seriesId, LocalDate fromDate);
 
     int markAbsentForCompletedLessons(LocalDateTime threshold);

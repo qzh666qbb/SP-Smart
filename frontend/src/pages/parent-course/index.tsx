@@ -4,10 +4,9 @@ import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
-import { Lesson, ParentProfile, Student } from '@/types';
+import { Lesson, Student } from '@/types';
 import { getLessons, getParentStudents, parentSignIn } from '@/services/api';
 import { formatDate } from '@/utils/format';
-import useAuthStore from '@/store/auth';
 import styles from './index.module.scss';
 
 export default function ParentCoursePage() {
@@ -18,9 +17,12 @@ export default function ParentCoursePage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signedLessonIds, setSignedLessonIds] = useState<string[]>([]);
   const lessonsRequestId = useRef(0);
-  const { profile } = useAuthStore();
-  const parentProfile = profile as ParentProfile;
+  const [loadError, setLoadError] = useState(false);
 
+  Taro.useDidShow(() => {
+    setSignedLessonIds([]);
+    fetchStudents();
+  });
   useEffect(() => {
     fetchStudents();
   }, []);
@@ -31,12 +33,19 @@ export default function ParentCoursePage() {
     }
   }, [selectedStudent]);
 
+  const studentsRequestId = useRef(0);
   const fetchStudents = async () => {
+    const studentRequestId = ++studentsRequestId.current;
+    lessonsRequestId.current += 1;
+    setIsLoading(true);
+    setLoadError(false);
+    setLessons([]);
     try {
       const nextStudents = await getParentStudents();
+      if (studentRequestId !== studentsRequestId.current) return;
       setStudents(nextStudents || []);
       if (nextStudents && nextStudents.length > 0) {
-        setSelectedStudent(nextStudents[0]);
+        setSelectedStudent(nextStudents.find(s => s.id === selectedStudent?.id) || nextStudents[0]);
       } else {
         lessonsRequestId.current += 1;
         setSelectedStudent(null);
@@ -44,19 +53,17 @@ export default function ParentCoursePage() {
         setIsLoading(false);
       }
     } catch (err) {
+      if (studentRequestId !== studentsRequestId.current) return;
       console.error('[ParentCoursePage]', err);
-      if (parentProfile?.students && parentProfile.students.length > 0) {
-        setStudents(parentProfile.students);
-        setSelectedStudent(parentProfile.students[0]);
-      } else {
-        setIsLoading(false);
-      }
+      setLoadError(true);
+      setIsLoading(false);
     }
   };
 
   const fetchLessons = async (studentId: string) => {
     const requestId = ++lessonsRequestId.current;
     setIsLoading(true);
+    setLoadError(false);
     try {
       const now = new Date();
       const start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -69,6 +76,7 @@ export default function ParentCoursePage() {
       if (requestId === lessonsRequestId.current) setLessons(data);
     } catch (err) {
       console.error('[ParentCoursePage]', err);
+      if (requestId === lessonsRequestId.current) setLoadError(true);
     } finally {
       if (requestId === lessonsRequestId.current) setIsLoading(false);
     }
@@ -145,7 +153,7 @@ export default function ParentCoursePage() {
         </Picker>
       )}
 
-      {!isLoading && students.length === 0 && (
+      {!isLoading && !loadError && students.length === 0 && (
         <Card className={styles.emptyCard} onClick={() => Taro.navigateTo({ url: '/pages/child-add-edit/index?isFirst=1' })}>
           <Text className={styles.emptyText}>暂无孩子资料，点击添加</Text>
         </Card>
@@ -180,6 +188,10 @@ export default function ParentCoursePage() {
           <View className={styles.loading}>
             <Text>加载中...</Text>
           </View>
+        ) : loadError ? (
+          <Card className={styles.emptyCard} onClick={fetchStudents}>
+            <Text className={styles.emptyText}>课程加载失败，点击重试</Text>
+          </Card>
         ) : lessons.length === 0 ? (
           <Card className={styles.emptyCard}>
             <Text className={styles.emptyText}>暂无上课记录</Text>

@@ -131,7 +131,7 @@ function refreshAccessToken(): Promise<string> {
       url: `${BASE_URL}/auth/refresh`,
       method: 'POST',
       data: { refreshToken },
-      header: { 'Content-Type': 'application/json' },
+      header: { 'Content-Type': 'application/json', 'X-Client-Version': '20261102' },
       success: (res) => {
         if (getSessionVersion() !== sessionVersion || getStoredRefreshToken() !== refreshToken) {
           reject(new RefreshTokenError('登录状态已变化，请重试', false));
@@ -184,7 +184,7 @@ export const request = async <T = any>(
   }
 
   const defaultHeader: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json', 'X-Client-Version': '20261102',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
 

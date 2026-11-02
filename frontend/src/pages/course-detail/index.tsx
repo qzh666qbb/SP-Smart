@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
@@ -6,7 +6,7 @@ import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
 import { Lesson, Student } from '@/types';
 import {
-  getSchedules,
+  getLessonDetail,
   getLessons,
   listParentChildren,
   parentSignIn,
@@ -31,7 +31,9 @@ export default function CourseDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
+  const [loadError, setLoadError] = useState(false);
+  const detailRequestId = useRef(0);
+  const reload = () => {
     const options = Taro.getCurrentInstance()?.router?.params;
     if (options?.id) {
       fetchLesson(
@@ -40,10 +42,17 @@ export default function CourseDetailPage() {
         options.date ? String(options.date) : undefined,
       );
     }
-  }, []);
+  };
+  useEffect(reload, []);
+  Taro.useDidShow(reload);
 
   const fetchLesson = async (id: string, studentId?: string, lessonDate?: string) => {
+    const requestId = ++detailRequestId.current;
     setIsLoading(true);
+    setLoadError(false);
+    setLesson(null);
+    setStudents([]);
+    setSelectedStudents([]);
     try {
       if (user?.role === 'PARENT' && studentId) {
         const now = new Date();
@@ -55,6 +64,7 @@ export default function CourseDetailPage() {
           }),
           listParentChildren(),
         ]);
+        if (requestId !== detailRequestId.current) return;
         const found = parentLessons.find((item) => String(item.id) === id);
         if (found) setLesson(found);
         const child = children.find((item) => String(item.id) === studentId);
@@ -65,17 +75,11 @@ export default function CourseDetailPage() {
         }
         return;
       }
-      const [schedules, attendance] = await Promise.all([
-        getSchedules(lessonDate ? { date: lessonDate } : {
-          startDate: `${new Date().getFullYear() - 1}-01-01`,
-          endDate: `${new Date().getFullYear() + 1}-12-31`,
-        }).catch(() => []),
-        getLessonAttendance({ lessonId: id }).catch(() => []),
+      const [found, attendance] = await Promise.all([
+        getLessonDetail(id), getLessonAttendance({ lessonId: id }),
       ]);
-      const found = schedules.find(s => String(s.id) === String(id));
-      if (found) {
-        setLesson(found);
-      }
+      if (requestId !== detailRequestId.current) return;
+      setLesson(found);
       if (Array.isArray(attendance) && attendance.length > 0) {
         setStudents(attendance.map((a: any) => ({
           id: String(a.studentId || a.id),
@@ -88,8 +92,9 @@ export default function CourseDetailPage() {
       }
     } catch (err) {
       console.error('[CourseDetailPage.fetchLesson]', err);
+      if (requestId === detailRequestId.current) setLoadError(true);
     } finally {
-      setIsLoading(false);
+      if (requestId === detailRequestId.current) setIsLoading(false);
     }
   };
 
@@ -130,6 +135,7 @@ export default function CourseDetailPage() {
       Taro.showToast({ title: `成功签到 ${selectedStudents.length} 人`, icon: 'success' });
     } catch (err) {
       console.error('[CourseDetailPage]', err);
+      reload();
       Taro.showToast({ title: '签到失败', icon: 'none' });
     } finally {
       setIsSubmitting(false);
@@ -151,6 +157,7 @@ export default function CourseDetailPage() {
             }, 1500);
           } catch (err) {
             console.error('[CourseDetailPage]', err);
+      reload();
             Taro.showToast({ title: '结课失败', icon: 'none' });
           } finally {
             setIsSubmitting(false);
@@ -169,6 +176,7 @@ export default function CourseDetailPage() {
       Taro.showToast({ title: '课程已开始', icon: 'success' });
     } catch (err) {
       console.error('[CourseDetailPage.start]', err);
+      reload();
       Taro.showToast({ title: '开始课程失败', icon: 'none' });
     } finally {
       setIsSubmitting(false);
@@ -188,7 +196,8 @@ export default function CourseDetailPage() {
   if (!lesson) {
     return (
       <View className={styles.container}>
-        <Text>找不到该课程</Text>
+        <Text>{loadError ? '课程加载失败，请刷新重试；课程可能已调整' : '课程已调整或删除，请返回课表查看'}</Text>
+        <CustomButton onClick={reload}>重新加载</CustomButton>
       </View>
     );
   }

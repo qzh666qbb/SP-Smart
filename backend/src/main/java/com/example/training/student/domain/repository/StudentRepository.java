@@ -18,6 +18,8 @@ public interface StudentRepository {
 
     List<Student> findByTeacherId(Long teacherId);
 
+    boolean canTeacherAccessStudent(Long teacherId, Long studentId);
+
     boolean existsByTeacherAndStudentId(Long teacherId, Long studentId);
 
     Optional<Student> findByBindMatch(String studentNo, String name, String parentPhone);

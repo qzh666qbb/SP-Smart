@@ -23,7 +23,10 @@ interface CalendarDay {
 }
 
 export default function ParentHomePage() {
-  Taro.useDidShow(() => notifyTabBarActive('/pages/parent-home/index'));
+  Taro.useDidShow(() => {
+    notifyTabBarActive('/pages/parent-home/index');
+    fetchStudents();
+  });
   const [schedules, setSchedules] = useState<Lesson[]>([]);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -42,14 +45,17 @@ export default function ParentHomePage() {
     if (selectedStudent) fetchSchedules(selectedStudent.id, currentMonth);
   }, [selectedStudent, currentMonth]);
 
+  const studentsRequestId = useRef(0);
   const fetchStudents = async () => {
+    const studentRequestId = ++studentsRequestId.current;
     setIsLoading(true);
     setStudentsError(false);
     try {
       const nextStudents = await listParentChildren();
+      if (studentRequestId !== studentsRequestId.current) return;
       setStudents(nextStudents || []);
       if (nextStudents && nextStudents.length > 0) {
-        setSelectedStudent(nextStudents[0]);
+        setSelectedStudent(nextStudents.find(s => s.id === selectedStudent?.id) || nextStudents[0]);
       } else {
         scheduleRequestId.current += 1;
         setSelectedStudent(null);
@@ -57,6 +63,7 @@ export default function ParentHomePage() {
         setIsLoading(false);
       }
     } catch (err) {
+      if (studentRequestId !== studentsRequestId.current) return;
       console.error('[ParentHomePage]', err);
       setStudentsError(true);
       setIsLoading(false);

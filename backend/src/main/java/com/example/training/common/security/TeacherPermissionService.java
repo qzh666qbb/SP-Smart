@@ -18,8 +18,13 @@ public class TeacherPermissionService {
             return true;
         }
         if ("TEACHER".equals(user.getRole())) {
-            return studentRepository.existsByTeacherAndStudentId(user.getProfileId(), studentId);
+            return studentRepository.canTeacherAccessStudent(user.getProfileId(), studentId);
         }
         return false;
+    }
+    public boolean canManageStudent(CurrentUser user, Long studentId) {
+        return user != null && studentId != null && ("ADMIN".equals(user.getRole())
+                || "TEACHER".equals(user.getRole())
+                && studentRepository.existsByTeacherAndStudentId(user.getProfileId(), studentId));
     }
 }

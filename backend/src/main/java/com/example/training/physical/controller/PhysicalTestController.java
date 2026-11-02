@@ -36,8 +36,12 @@ public class PhysicalTestController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ApiResponse<PhysicalTestRecord> createTestRecord(
             @Valid @RequestBody PhysicalTestCreateRequest request,
+            @RequestHeader(value = "X-Client-Version", required = false) String clientVersion,
             @AuthenticationPrincipal CurrentUser currentUser) {
         assertTeacherCanAccessStudent(currentUser, request.getStudentId());
+        if (clientVersion == null && Long.valueOf(1L).equals(request.getBatchId())) {
+            request.setBatchId(physicalTestApplicationService.resolveLegacyBatchId());
+        }
         PhysicalTestRecord response = physicalTestApplicationService.createTestRecord(request, currentUser);
         return ApiResponse.success(response);
     }

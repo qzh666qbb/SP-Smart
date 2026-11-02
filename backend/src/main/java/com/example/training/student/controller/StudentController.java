@@ -78,7 +78,7 @@ public class StudentController {
             @Valid @RequestBody StudentCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
         if ("TEACHER".equals(currentUser.getRole())
-                && !teacherPermissionService.canAccessStudent(currentUser, id)) {
+                && !teacherPermissionService.canManageStudent(currentUser, id)) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限修改该学员信息");
         }
         StudentResponse response = studentApplicationService.updateStudent(id, request, currentUser);

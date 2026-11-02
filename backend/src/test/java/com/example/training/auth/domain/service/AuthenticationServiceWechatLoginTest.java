@@ -30,13 +30,14 @@ class AuthenticationServiceWechatLoginTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock TeacherRepository teacherRepository;
     @Mock WechatGateway wechatGateway;
+    @Mock LegacyWechatTicketService legacyWechatTickets;
 
     AuthenticationService service;
 
     @BeforeEach
     void setUp() {
         service = new AuthenticationService(userRepository, jwtService, passwordEncoder,
-                teacherRepository, wechatGateway);
+                teacherRepository, wechatGateway, legacyWechatTickets);
     }
 
     @Test
@@ -229,6 +230,30 @@ class AuthenticationServiceWechatLoginTest {
         assertEquals(12L, result.get("userId"));
         assertEquals(22L, result.get("profileId"));
         verify(userRepository).updateLastLoginAt(12L);
+    }
+
+    @Test
+    void legacyTicketUsesVerifiedAccountRoleInsteadOfClientRole() {
+        String ticket = "compat_0123456789abcdef0123456789abcdef";
+        var identity = identity("existing-parent");
+        User parent = enabledUser(8L, identity.openid(), "PARENT");
+        when(legacyWechatTickets.consume(ticket)).thenReturn(identity);
+        when(userRepository.findByWechatOpenid(identity.openid())).thenReturn(Optional.of(parent));
+        when(userRepository.findById(8L)).thenReturn(Optional.of(parent));
+        arrangeTokens();
+        var result = service.loginByWechat(ticket, "TEACHER", null, null);
+        assertEquals("PARENT", result.get("role"));
+        verifyNoInteractions(wechatGateway);
+    }
+
+    @Test
+    void legacyTicketCannotCreateUnapprovedAccount() {
+        String ticket = "compat_0123456789abcdef0123456789abcdef";
+        var identity = identity("unknown");
+        when(legacyWechatTickets.consume(ticket)).thenReturn(identity);
+        arrangeIdentityEmpty(identity);
+        assertThrows(BusinessException.class, () -> service.loginByWechat(ticket, "TEACHER", null, null));
+        verify(userRepository, never()).save(any());
     }
 
     private WechatGateway.WechatIdentity identity(String value) {

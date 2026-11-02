@@ -160,11 +160,11 @@ export default function MinePage() {
             <Text className={styles.userName}>{profile?.name || user?.username}</Text>
             <View className={styles.userMeta}>
               <Text className={styles.userRole}>{getRoleTag(user!.role)}</Text>
-              {user?.role === 'TEACHER' && (profile as TeacherProfile).school && (
-                <Text className={styles.userSchool}>{(profile as TeacherProfile).school}</Text>
+              {user?.role === 'TEACHER' && (profile as TeacherProfile | null)?.school && (
+                <Text className={styles.userSchool}>{(profile as TeacherProfile | null)?.school}</Text>
               )}
-              {user?.role === 'PARENT' && (profile as ParentProfile).students?.[0] && (
-                <Text className={styles.userSchool}>绑定孩子: {(profile as ParentProfile).students![0].name}</Text>
+              {user?.role === 'PARENT' && (profile as ParentProfile | null)?.students?.[0] && (
+                <Text className={styles.userSchool}>绑定孩子: {(profile as ParentProfile | null)?.students![0].name}</Text>
               )}
             </View>
           </View>

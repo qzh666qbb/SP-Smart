@@ -30,6 +30,7 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final TeacherRepository teacherRepository;
     private final WechatGateway wechatGateway;
+    private final LegacyWechatTicketService legacyWechatTickets;
 
     @Transactional
     public Map<String, Object> registerParent(ParentRegisterRequest req) {
@@ -66,10 +67,25 @@ public class AuthenticationService {
         return issueTokens(user);
     }
 
+    public Map<String, String> exchangeLegacyWechatCode(String code) {
+        return Map.of("openid", legacyWechatTickets.exchange(code));
+    }
+
     /** 微信 code 只能在服务端兑换；客户端不能提交 openid 换取 JWT。 */
     @Transactional
     public Map<String, Object> loginByWechat(String code, String requestedRole,
                                               String nickname, String avatarUrl) {
+        if (code != null && code.startsWith(LegacyWechatTicketService.PREFIX)) {
+            User existing = findByWechatIdentity(legacyWechatTickets.consume(code));
+            if (existing == null) {
+                throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS,
+                        "请使用账号密码登录并绑定微信，或更新小程序后注册");
+            }
+            ensureExistingTeacherHasProfile(existing);
+            ensureEnabled(existing);
+            updateLastLogin(existing);
+            return issueTokens(existing);
+        }
         validateWechatRole(requestedRole);
         WechatGateway.WechatIdentity identity = wechatGateway.exchangeCode(code);
         User user = findByWechatIdentity(identity);

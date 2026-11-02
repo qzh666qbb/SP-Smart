@@ -95,7 +95,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
         } else {
             int rows = lessonMapper.updateWithVersion(entity);
             if (rows == 0) {
-                throw new com.baomidou.mybatisplus.core.exceptions.MybatisPlusException("课程版本冲突，数据已被并发修改: id=" + lesson.getId());
+                throw new com.example.training.common.exception.BusinessException(
+                        com.example.training.common.exception.ErrorCode.OPERATION_NOT_ALLOWED, "课程已更新，请刷新后重试");
             }
         }
         LessonEntity saved = lessonMapper.selectById(entity.getId());
@@ -434,6 +435,44 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                         .set(LessonEntity::getStatus, "CANCELLED")
                         .set(LessonEntity::getCancelReason, "排课计划已删除")
                         .set(LessonEntity::getUpdatedAt, now));
+    }
+
+    @Override
+    public List<Lesson> findSeriesLessonsForUpdate(Long seriesId, LocalDate fromDate) {
+        return lessonMapper.selectList(new LambdaQueryWrapper<LessonEntity>()
+                .eq(LessonEntity::getScheduleSeriesId, seriesId)
+                .ge(LessonEntity::getLessonDate, fromDate).isNull(LessonEntity::getDeletedAt)
+                .orderByAsc(LessonEntity::getId).last("FOR UPDATE"))
+                .stream().map(this::convertToDomain).toList();
+    }
+
+    @Override
+    public void updatePendingLesson(Lesson lesson, List<Long> studentIds) {
+        List<LessonStudent> oldRoster = findByLessonId(lesson.getId());
+        for (LessonStudent student : oldRoster) {
+            if (!studentIds.contains(student.getStudentId())
+                    && (!"PENDING".equals(student.getAttendanceStatus()) || Boolean.TRUE.equals(student.getShouldConsume())
+                        || student.getHourTransactionId() != null)) {
+                throw new com.example.training.common.exception.BusinessException(
+                        com.example.training.common.exception.ErrorCode.OPERATION_NOT_ALLOWED,
+                        "该课次已有签到或课时记录，不能移除相关学员");
+            }
+        }
+        int rows = jdbcTemplate.update("""
+                UPDATE lesson SET course_id=?, class_group_id=?, teacher_id=?, assistant_teacher_id_1=?,
+                  assistant_teacher_id_2=?, lesson_date=?, start_time=?, end_time=?, consume_hours=?,
+                  updated_by=?, updated_at=NOW(), version=version+1
+                WHERE id=? AND status='PENDING' AND deleted_at IS NULL AND version=?
+                """, lesson.getCourseId(), lesson.getClassGroupId(), lesson.getTeacherId(),
+                lesson.getAssistantTeacherId1(), lesson.getAssistantTeacherId2(), lesson.getLessonDate(),
+                lesson.getStartTime(), lesson.getEndTime(), lesson.getConsumeHours(), lesson.getUpdatedBy(),
+                lesson.getId(), lesson.getVersion());
+        if (rows != 1) throw new com.example.training.common.exception.BusinessException(
+                com.example.training.common.exception.ErrorCode.OPERATION_NOT_ALLOWED, "课程状态已变化，请刷新后重试");
+        lessonStudentMapper.delete(new LambdaQueryWrapper<LessonStudentEntity>()
+                .eq(LessonStudentEntity::getLessonId, lesson.getId()).notIn(LessonStudentEntity::getStudentId, studentIds));
+        jdbcTemplate.update("UPDATE lesson_student SET consume_hours=? WHERE lesson_id=? AND should_consume=0 AND hour_transaction_id IS NULL",
+                lesson.getConsumeHours(), lesson.getId());
     }
 
     @Override

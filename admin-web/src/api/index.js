@@ -4,7 +4,8 @@ import { apiErrorMessage } from '@/utils/apiError'
 
 const service = axios.create({
   baseURL: '/api',
-  timeout: 15000
+  timeout: 15000,
+  headers: { 'X-Client-Version': '20261102' }
 })
 
 const ENABLE_MOCK_FALLBACK = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true'

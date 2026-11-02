@@ -385,6 +385,13 @@ public class ScheduleApplicationService {
                 request.getLessonId(), request.getStudentId(), request.getAttendanceStatus());
     }
     
+    public Lesson getLessonDetail(Long id, CurrentUser user) {
+        Lesson lesson = scheduleRepository.findLessonById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.LESSON_NOT_FOUND, "课程已调整或删除，请刷新课表"));
+        assertCanManageLesson(lesson, user);
+        return enrichLessons(List.of(lesson)).get(0);
+    }
+
     public List<Lesson> getLessonsByTeacher(Long teacherId, LocalDate date) {
         return enrichLessons(scheduleRepository.findByTeacherIdAndDate(teacherId, date));
     }
@@ -510,17 +517,61 @@ public class ScheduleApplicationService {
         validateSelectedStudents(selectedStudentIds, currentUser, saved.getTeacherId());
         scheduleRepository.replaceScheduleSeriesStudents(saved.getId(), selectedStudentIds, currentUser.getUserId());
         LocalDate rebuildFrom = LocalDate.now().isAfter(saved.getStartDate()) ? LocalDate.now() : saved.getStartDate();
-        scheduleRepository.softDeletePendingLessonsBySeries(saved.getId(), rebuildFrom);
-        if ("WEEKLY".equals(saved.getRecurrenceType())) {
-            generateLessonsFromSeries(saved, selectedStudentIds, rebuildFrom);
-        } else if (!rebuildFrom.isAfter(saved.getStartDate())) {
-            Lesson savedLesson = scheduleRepository.saveLesson(buildLesson(saved, saved.getStartDate()));
-            attachStudentsForLesson(savedLesson, selectedStudentIds);
-        }
+        reconcilePendingLessons(saved, selectedStudentIds, rebuildFrom, currentUser.getUserId());
         log.info("更新排课系列: id={}, name={}", id, saved.getSeriesName());
         return saved;
     }
     
+    private void reconcilePendingLessons(ScheduleSeries series, List<Long> studentIds, LocalDate from, Long actorId) {
+        List<Lesson> existing = scheduleRepository.findSeriesLessonsForUpdate(series.getId(), LocalDate.now());
+        java.util.Set<LocalDate> desired = new java.util.LinkedHashSet<>();
+        LocalDate end = "NONE".equals(series.getRecurrenceType()) ? series.getStartDate() : series.getEndDate();
+        if (end == null) end = LocalDate.now().plusYears(1);
+        for (LocalDate date = from; !date.isAfter(end); date = date.plusDays(1)) {
+            if (matchesDate(series, date)) desired.add(date);
+        }
+        List<Lesson> pending = existing.stream().filter(Lesson::isPending).toList();
+        // 单次改日期也保留原ID；已开课、完成及手动取消的课次不覆盖。
+        boolean moveSingle = "NONE".equals(series.getRecurrenceType()) && pending.size() == 1
+                && desired.size() == 1 && existing.stream().noneMatch(l -> !l.isPending() && desired.contains(l.getLessonDate()));
+        for (Lesson old : existing) {
+            // 周循环日期移除后重新加入，可以恢复因排课调整而取消的课次。
+            if ("CANCELLED".equals(old.getStatus())
+                    && "排课计划已调整，请查看最新课表".equals(old.getCancelReason())
+                    && desired.contains(old.getLessonDate())) {
+                old.setStatus("PENDING");
+                old.setCancelReason(null);
+                old.setUpdatedBy(actorId);
+                old = scheduleRepository.saveLesson(old);
+            }
+            if (!old.isPending()) { desired.remove(old.getLessonDate()); continue; }
+            LocalDate target = moveSingle ? series.getStartDate() : old.getLessonDate();
+            if (!desired.remove(target)) {
+                if (scheduleRepository.findByLessonId(old.getId()).stream().anyMatch(student ->
+                        Boolean.TRUE.equals(student.getShouldConsume()) || student.getHourTransactionId() != null
+                        || !"PENDING".equals(student.getAttendanceStatus()))) {
+                    throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "待调整课次已有签到记录，请先处理签到后再修改日期");
+                }
+                old.setStatus("CANCELLED");
+                old.setCancelReason("排课计划已调整，请查看最新课表");
+                old.setUpdatedBy(actorId);
+                scheduleRepository.saveLesson(old);
+                continue;
+            }
+            Lesson replacement = buildLesson(series, target);
+            replacement.setId(old.getId());
+            replacement.setVersion(old.getVersion());
+            replacement.setUpdatedBy(actorId);
+            scheduleRepository.updatePendingLesson(replacement, studentIds);
+            attachStudentsForLesson(replacement, studentIds);
+        }
+        for (LocalDate date : desired) {
+            if (!scheduleRepository.existsLessonBySeriesIdAndDate(series.getId(), date)) {
+                attachStudentsForLesson(scheduleRepository.saveLesson(buildLesson(series, date)), studentIds);
+            }
+        }
+    }
+
     public List<Lesson> getChildSchedules(Long studentId, LocalDate startDate, LocalDate endDate, CurrentUser currentUser) {
         List<Lesson> lessons = enrichLessons(scheduleRepository.findByStudentIdAndDateRange(studentId, startDate, endDate));
         for (Lesson lesson : lessons) {

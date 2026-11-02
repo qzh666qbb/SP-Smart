@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useDidShow, useDidHide } from '@tarojs/taro';
 import { getCurrentUser } from '@/services/api';
 import useAuthStore from '@/store/auth';
@@ -7,7 +7,9 @@ import { mergeProfile } from '@/utils/profile';
 import './app.scss';
 
 function App(props) {
-  useEffect(() => {
+  const revision = useRef(0);
+  const refreshSession = () => {
+    const requestId = ++revision.current;
     const state = useAuthStore.getState();
     if (!state.token || !state.user) {
       state.setValidated(true);
@@ -18,9 +20,9 @@ function App(props) {
     getCurrentUser()
       .then(({ user, profile }) => {
         const latest = useAuthStore.getState();
-        if (!active || latest.sessionVersion !== sessionVersion || !latest.token || !latest.user || !latest.isLoggedIn) return;
+        if (!active || requestId !== revision.current || latest.sessionVersion !== sessionVersion || !latest.token || !latest.user || !latest.isLoggedIn) return;
         const mergedProfile = mergeProfile(latest.profile, profile);
-        latest.login(latest.token!, { ...latest.user!, ...user }, mergedProfile, latest.refreshToken);
+        latest.syncIdentity({ ...latest.user!, ...user }, mergedProfile);
       })
       .catch(() => {
         // 认证失败由请求层统一刷新 token 或清理登录态。
@@ -28,9 +30,9 @@ function App(props) {
         if (active && latest.sessionVersion === sessionVersion) latest.setValidated(true);
       });
     return () => { active = false; };
-  }, []);
-
-  useDidShow(() => {});
+  };
+  useEffect(refreshSession, []);
+  useDidShow(() => { refreshSession(); });
 
   useDidHide(() => {});
 
