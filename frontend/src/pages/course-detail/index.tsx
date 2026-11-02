@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { View, Text } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
@@ -7,10 +7,15 @@ import CustomButton from '@/components/Button';
 import { Lesson, Student } from '@/types';
 import {
   getSchedules,
+  getLessons,
+  listParentChildren,
+  parentSignIn,
   signIn,
   completeCourse,
+  startLesson,
   getLessonAttendance,
 } from '@/services/api';
+import useAuthStore from '@/store/auth';
 import { formatDate, formatTime } from '@/utils/format';
 import styles from './index.module.scss';
 
@@ -19,6 +24,7 @@ interface StudentWithSignIn extends Student {
 }
 
 export default function CourseDetailPage() {
+  const { user } = useAuthStore();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [students, setStudents] = useState<StudentWithSignIn[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
@@ -28,22 +34,47 @@ export default function CourseDetailPage() {
   useEffect(() => {
     const options = Taro.getCurrentInstance()?.router?.params;
     if (options?.id) {
-      fetchLesson(String(options.id));
+      fetchLesson(
+        String(options.id),
+        options.studentId ? String(options.studentId) : undefined,
+        options.date ? String(options.date) : undefined,
+      );
     }
   }, []);
 
-  const fetchLesson = async (id: string) => {
+  const fetchLesson = async (id: string, studentId?: string, lessonDate?: string) => {
     setIsLoading(true);
     try {
+      if (user?.role === 'PARENT' && studentId) {
+        const now = new Date();
+        const [parentLessons, children] = await Promise.all([
+          getLessons({
+            studentId,
+            startDate: lessonDate || `${now.getFullYear() - 1}-01-01`,
+            endDate: lessonDate || `${now.getFullYear() + 1}-12-31`,
+          }),
+          listParentChildren(),
+        ]);
+        const found = parentLessons.find((item) => String(item.id) === id);
+        if (found) setLesson(found);
+        const child = children.find((item) => String(item.id) === studentId);
+        if (child) {
+          const signed = found?.studentAttendance?.[studentId] === 'PRESENT';
+          setStudents([{ ...child, signed }]);
+          setSelectedStudents(signed ? [] : [studentId]);
+        }
+        return;
+      }
       const [schedules, attendance] = await Promise.all([
-        getSchedules().catch(() => []),
+        getSchedules(lessonDate ? { date: lessonDate } : {
+          startDate: `${new Date().getFullYear() - 1}-01-01`,
+          endDate: `${new Date().getFullYear() + 1}-12-31`,
+        }).catch(() => []),
         getLessonAttendance({ lessonId: id }).catch(() => []),
       ]);
       const found = schedules.find(s => String(s.id) === String(id));
       if (found) {
         setLesson(found);
-      } else {
-        setLesson({ id, lessonNo: `ID:${id}`, status: 'SCHEDULED' } as any);
       }
       if (Array.isArray(attendance) && attendance.length > 0) {
         setStudents(attendance.map((a: any) => ({
@@ -87,7 +118,11 @@ export default function CourseDetailPage() {
 
     setIsSubmitting(true);
     try {
-      await signIn({ lessonId: lesson!.id, studentIds: selectedStudents });
+      if (user?.role === 'PARENT') {
+        await parentSignIn({ lessonId: lesson!.id, studentId: selectedStudents[0] });
+      } else {
+        await signIn({ lessonId: lesson!.id, studentIds: selectedStudents });
+      }
       setStudents(students.map(s =>
         selectedStudents.includes(s.id) ? { ...s, signed: true } : s
       ));
@@ -125,6 +160,21 @@ export default function CourseDetailPage() {
     });
   };
 
+  const handleStart = async () => {
+    if (!lesson || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await startLesson({ lessonId: lesson.id });
+      setLesson({ ...lesson, status: 'IN_PROGRESS' });
+      Taro.showToast({ title: '课程已开始', icon: 'success' });
+    } catch (err) {
+      console.error('[CourseDetailPage.start]', err);
+      Taro.showToast({ title: '开始课程失败', icon: 'none' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const signedCount = students.filter(s => s.signed).length;
 
   if (!lesson && isLoading) {
@@ -143,11 +193,14 @@ export default function CourseDetailPage() {
     );
   }
 
+  const canRecordAttendance = lesson.status === 'IN_PROGRESS'
+    || (user?.role === 'PARENT' && lesson.status === 'SCHEDULED');
+
   return (
-    <ScrollView className={styles.detailPage} scrollY>
+    <View className={styles.detailPage}>
       <Card className={styles.infoCard}>
         <View className={styles.header}>
-          <Text className={styles.courseName}>体育课</Text>
+          <Text className={styles.courseName}>{lesson.courseName || `课程 #${lesson.courseId}`}</Text>
           {lesson.status === 'IN_PROGRESS' && <Tag type="warning">进行中</Tag>}
           {lesson.status === 'COMPLETED' && <Tag type="success">已完成</Tag>}
           {lesson.status === 'SCHEDULED' && <Tag type="info">未开始</Tag>}
@@ -194,7 +247,7 @@ export default function CourseDetailPage() {
       <Card className={styles.studentsCard}>
         <View className={styles.studentsHeader}>
           <Text className={styles.cardTitle}>学员列表</Text>
-          {(lesson.status === 'IN_PROGRESS' || lesson.status === 'SCHEDULED') && (
+          {canRecordAttendance && (
             <Text className={styles.selectAllLink} onClick={selectAllUnsigned}>
               {selectedStudents.length > 0 ? '取消全选' : '全选未签到'}
             </Text>
@@ -209,7 +262,7 @@ export default function CourseDetailPage() {
           ) : (
             students.map(student => (
               <View key={student.id} className={`${styles.studentItem} ${selectedStudents.includes(student.id) ? styles.selected : ''}`}>
-                {(lesson.status === 'IN_PROGRESS' || lesson.status === 'SCHEDULED') && (
+                {canRecordAttendance && (
                   <View
                     className={`${styles.checkbox} ${student.signed ? styles.signed : ''} ${!student.signed && selectedStudents.includes(student.id) ? styles.checked : ''}`}
                     onClick={(e: any) => {
@@ -236,30 +289,25 @@ export default function CourseDetailPage() {
         </View>
       </Card>
 
-      {(lesson.status === 'IN_PROGRESS' || lesson.status === 'SCHEDULED') && (
+      {(canRecordAttendance || (lesson.status === 'SCHEDULED' && user?.role !== 'PARENT')) && (
         <View className={styles.actionBar}>
-          {selectedStudents.length > 0 && (
+          {canRecordAttendance && selectedStudents.length > 0 && (
             <CustomButton type="primary" size="lg" onClick={handleSignIn} disabled={isSubmitting}>
               {isSubmitting ? '签到中...' : `签到 ${selectedStudents.length} 人`}
             </CustomButton>
           )}
-          {selectedStudents.length === 0 && lesson.status === 'IN_PROGRESS' && (
-            <CustomButton type="warning" size="lg" onClick={handleSignIn} disabled={isSubmitting}>
-              签到
+          {lesson.status === 'SCHEDULED' && user?.role !== 'PARENT' && (
+            <CustomButton type="warning" size="lg" onClick={handleStart} disabled={isSubmitting}>
+              {isSubmitting ? '处理中...' : '开始课程'}
             </CustomButton>
           )}
-          {lesson.status === 'SCHEDULED' && selectedStudents.length === 0 && (
-            <CustomButton type="warning" size="lg" onClick={() => Taro.showToast({ title: '请选择要签到的学生', icon: 'none' })}>
-              开始课程
-            </CustomButton>
-          )}
-          {lesson.status === 'IN_PROGRESS' && (
+          {lesson.status === 'IN_PROGRESS' && user?.role !== 'PARENT' && (
             <CustomButton type="secondary" size="lg" onClick={handleComplete} disabled={isSubmitting}>
               {isSubmitting ? '结课中...' : '完成课程'}
             </CustomButton>
           )}
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }

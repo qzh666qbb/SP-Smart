@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Picker, Textarea } from '@tarojs/components';
 import Taro from '@tarojs/taro';
-import CustomButton from '@/components/Button';
 import Card from '@/components/Card';
+import CustomButton from '@/components/Button';
 import Input from '@/components/Input/index';
 import { createChildByParent } from '@/services/api';
 import { Student } from '@/types';
@@ -29,19 +29,8 @@ export default function ChildAddEditPage() {
   const [isFirstChild, setIsFirstChild] = useState(true);
 
   useEffect(() => {
-    try {
-      const pages = Taro.getCurrentPages();
-      const prev = pages[pages.length - 2];
-      const route = (prev as any)?.route || (prev as any)?.$taroPath || '';
-      if (/parent-children/.test(String(route))) {
-        const anyPrev = prev as any;
-        const existingList: any =
-          anyPrev?.data?.list ?? anyPrev?.list ?? anyPrev?.childrenList ?? null;
-        if (Array.isArray(existingList) && existingList.length > 0) {
-          setIsFirstChild(false);
-        }
-      }
-    } catch (_) { /* noop */ }
+    const isFirst = Taro.getCurrentInstance()?.router?.params?.isFirst;
+    setIsFirstChild(isFirst === '1');
   }, []);
 
   const handleField = (field: 'name' | 'phone' | 'medicalNotes' | 'remark', v: any) => {
@@ -75,7 +64,7 @@ export default function ChildAddEditPage() {
 
       if (isFirstChild) {
         Taro.showToast({
-          title: '已成功添加孩子，现在您可以为TA充值课时',
+          title: '已成功添加孩子',
           icon: 'none',
           duration: 2500,
         });
@@ -88,20 +77,10 @@ export default function ChildAddEditPage() {
       } catch (_) { /* noop */ }
 
       setTimeout(() => {
-        if (isFirstChild && created?.id) {
-          Taro.redirectTo({
-            url: `/pages/hour-transaction/index?studentId=${created.id}`,
-          }).catch(() => {
-            Taro.navigateBack({ delta: 1 }).catch(() => {
-              Taro.reLaunch({ url: '/pages/parent-children/index' });
-            });
-          });
-        } else {
-          Taro.navigateBack({ delta: 1 }).catch(() => {
-            Taro.reLaunch({ url: '/pages/parent-children/index' });
-          });
-        }
-      }, isFirstChild ? 2000 : 1000);
+        // Return to the children page so its parent navigation bar remains
+        // visible after saving a child.
+        Taro.reLaunch({ url: '/pages/parent-children/index' });
+      }, 1000);
     } catch (err: any) {
       console.error('[ChildAddEdit.submit]', err);
       const msg = err?.message || '保存失败';
@@ -119,13 +98,11 @@ export default function ChildAddEditPage() {
             <Text className={styles.fieldLabel}>
               <Text className={styles.required}>*</Text>姓名
             </Text>
-            <View className={styles.inputWrap}>
-              <Input
-                placeholder="请输入孩子姓名"
-                value={name}
-                onChange={(v) => handleField('name', v)}
-              />
-            </View>
+            <Input
+              placeholder="请输入孩子姓名"
+              value={name}
+              onChange={(v) => handleField('name', v)}
+            />
           </View>
 
           <View className={styles.field}>
@@ -166,14 +143,12 @@ export default function ChildAddEditPage() {
 
           <View className={styles.field}>
             <Text className={styles.fieldLabel}>孩子本人手机号（选填）</Text>
-            <View className={styles.inputWrap}>
-              <Input
-                type="number"
-                placeholder="用于接收课程提醒等"
-                value={phone}
-                onChange={(v) => handleField('phone', v)}
-              />
-            </View>
+            <Input
+              type="number"
+              placeholder="用于接收课程提醒等"
+              value={phone}
+              onChange={(v) => handleField('phone', v)}
+            />
           </View>
 
           <View className={styles.field}>

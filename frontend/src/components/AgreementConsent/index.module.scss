@@ -1,0 +1,55 @@
+@use '@/styles/variables.scss' as *;
+
+.consentRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: $spacing-md 0;
+}
+
+.checkbox {
+  width: 34rpx;
+  height: 34rpx;
+  flex: 0 0 34rpx;
+  margin: 2rpx 12rpx 0 0;
+  border: 2rpx solid $color-border;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-bg-card;
+}
+
+.checked {
+  border-color: $color-primary;
+  background: $color-primary;
+}
+
+.checkmark {
+  color: $color-text-white;
+  font-size: 24rpx;
+  font-weight: $font-weight-bold;
+  line-height: 1;
+}
+
+.consentContent {
+  flex: 1;
+}
+
+.consentText,
+.consentHint {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  line-height: 1.7;
+}
+
+.consentHint {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+}
+
+.link {
+  color: $color-primary;
+}

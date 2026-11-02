@@ -3,9 +3,12 @@ export type UserRole = 'ADMIN' | 'TEACHER' | 'PARENT';
 export interface User {
   id: string;
   username: string;
+  nickname?: string;
   role: UserRole;
   phone?: string;
   avatar?: string;
+  wechatBound?: boolean;
+  profileComplete?: boolean;
   createTime?: string;
 }
 
@@ -54,6 +57,7 @@ export interface LoginParams {
 
 export interface LoginResult {
   token: string;
+  refreshToken?: string;
   user: User;
   profile: TeacherProfile | ParentProfile | null;
 }

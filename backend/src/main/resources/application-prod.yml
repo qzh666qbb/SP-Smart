@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mariadb://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:training_db}?useSSL=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci
+    url: jdbc:mariadb://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:training_db}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci
     username: ${DB_USER:training}
     password: ${DB_PASSWORD:}
     hikari:
@@ -44,7 +44,7 @@ app:
   jwt:
     access-token-expire-seconds: 7200
     refresh-token-expire-seconds: 2592000
-    secret: ${JWT_SECRET:please-change-this-to-a-long-random-string-in-prod}
+    secret: ${JWT_SECRET}
 
   file:
     max-excel-size-mb: 20
@@ -72,7 +72,7 @@ app:
     max-children-per-parent: 6
 
   security:
-    default-temp-password: "123456"
+    default-temp-password: ${DEFAULT_TEMP_PASSWORD}
 
 logging:
   level:

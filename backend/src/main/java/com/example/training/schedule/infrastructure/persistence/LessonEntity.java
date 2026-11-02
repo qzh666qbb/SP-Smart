@@ -25,6 +25,10 @@ public class LessonEntity {
     private Long courseId;
     private Long classGroupId;
     private Long teacherId;
+    @TableField("assistant_teacher_id_1")
+    private Long assistantTeacherId1;
+    @TableField("assistant_teacher_id_2")
+    private Long assistantTeacherId2;
     private LocalDate lessonDate;
     private LocalTime startTime;
     private LocalTime endTime;
@@ -55,6 +59,8 @@ public class LessonEntity {
     public Long getCourseId() { return courseId; }    public void setCourseId(Long courseId) { this.courseId = courseId; }
     public Long getClassGroupId() { return classGroupId; }    public void setClassGroupId(Long classGroupId) { this.classGroupId = classGroupId; }
     public Long getTeacherId() { return teacherId; }    public void setTeacherId(Long teacherId) { this.teacherId = teacherId; }
+    public Long getAssistantTeacherId1() { return assistantTeacherId1; }    public void setAssistantTeacherId1(Long assistantTeacherId1) { this.assistantTeacherId1 = assistantTeacherId1; }
+    public Long getAssistantTeacherId2() { return assistantTeacherId2; }    public void setAssistantTeacherId2(Long assistantTeacherId2) { this.assistantTeacherId2 = assistantTeacherId2; }
     public LocalDate getLessonDate() { return lessonDate; }    public void setLessonDate(LocalDate lessonDate) { this.lessonDate = lessonDate; }
     public LocalTime getStartTime() { return startTime; }    public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
     public LocalTime getEndTime() { return endTime; }    public void setEndTime(LocalTime endTime) { this.endTime = endTime; }

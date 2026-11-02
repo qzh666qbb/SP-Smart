@@ -3,6 +3,8 @@ package com.example.training.physical.application.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -27,6 +29,7 @@ public class PhysicalTestCreateRequest {
     
     @NotNull(message = "成绩详情不能为空")
     @NotEmpty(message = "成绩详情不能为空")
+    @Valid
     private List<ScoreDetail> scores;
     
     private String remark;
@@ -38,6 +41,8 @@ public class PhysicalTestCreateRequest {
         @NotNull(message = "指标ID不能为空")
         private Long itemId;
         
+        @NotNull(message = "测试值不能为空")
+        @DecimalMin(value = "0", message = "测试值不能小于0")
         private BigDecimal rawValue;
         
         private BigDecimal convertedScore;

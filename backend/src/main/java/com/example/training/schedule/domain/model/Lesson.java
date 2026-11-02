@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Builder
 @NoArgsConstructor
@@ -21,6 +22,11 @@ public class Lesson {
     private Long courseId;
     private Long classGroupId;
     private Long teacherId;
+    private String courseName;
+    private String teacherName;
+    private Map<Long, String> studentAttendance;
+    private Long assistantTeacherId1;
+    private Long assistantTeacherId2;
     private LocalDate lessonDate;
     private LocalTime startTime;
     private LocalTime endTime;
@@ -60,6 +66,11 @@ public class Lesson {
     public Long getCourseId() { return courseId; }    public void setCourseId(Long courseId) { this.courseId = courseId; }
     public Long getClassGroupId() { return classGroupId; }    public void setClassGroupId(Long classGroupId) { this.classGroupId = classGroupId; }
     public Long getTeacherId() { return teacherId; }    public void setTeacherId(Long teacherId) { this.teacherId = teacherId; }
+    public String getCourseName() { return courseName; }    public void setCourseName(String courseName) { this.courseName = courseName; }
+    public String getTeacherName() { return teacherName; }    public void setTeacherName(String teacherName) { this.teacherName = teacherName; }
+    public Map<Long, String> getStudentAttendance() { return studentAttendance; }    public void setStudentAttendance(Map<Long, String> studentAttendance) { this.studentAttendance = studentAttendance; }
+    public Long getAssistantTeacherId1() { return assistantTeacherId1; }    public void setAssistantTeacherId1(Long assistantTeacherId1) { this.assistantTeacherId1 = assistantTeacherId1; }
+    public Long getAssistantTeacherId2() { return assistantTeacherId2; }    public void setAssistantTeacherId2(Long assistantTeacherId2) { this.assistantTeacherId2 = assistantTeacherId2; }
     public LocalDate getLessonDate() { return lessonDate; }    public void setLessonDate(LocalDate lessonDate) { this.lessonDate = lessonDate; }
     public LocalTime getStartTime() { return startTime; }    public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
     public LocalTime getEndTime() { return endTime; }    public void setEndTime(LocalTime endTime) { this.endTime = endTime; }

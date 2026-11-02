@@ -16,7 +16,7 @@
         <el-form-item prop="username">
           <el-input 
             v-model="form.username" 
-            placeholder="请输入用户名（管理员 admin）" 
+            placeholder="请输入用户名"
             size="large"
             class="custom-input"
           />
@@ -25,7 +25,7 @@
           <el-input 
             v-model="form.password" 
             type="password" 
-            placeholder="请输入密码（默认 123456）" 
+            placeholder="请输入密码"
             size="large"
             show-password
             class="custom-input"

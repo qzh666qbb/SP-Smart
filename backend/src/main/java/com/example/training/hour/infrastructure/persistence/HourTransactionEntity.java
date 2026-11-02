@@ -34,6 +34,9 @@ public class HourTransactionEntity {
     
     @TableField("hour_source")
     private String hourSource;
+
+    @TableField("source_breakdown")
+    private String sourceBreakdown;
     
     @TableField("package_record_id")
     private Long packageRecordId;
@@ -59,6 +62,7 @@ public class HourTransactionEntity {
     public String getOperatorRole() { return operatorRole; }    public void setOperatorRole(String operatorRole) { this.operatorRole = operatorRole; }
     public String getIdempotencyKey() { return idempotencyKey; }    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     public String getHourSource() { return hourSource; }    public void setHourSource(String hourSource) { this.hourSource = hourSource; }
+    public String getSourceBreakdown() { return sourceBreakdown; }    public void setSourceBreakdown(String sourceBreakdown) { this.sourceBreakdown = sourceBreakdown; }
     public Long getPackageRecordId() { return packageRecordId; }    public void setPackageRecordId(Long packageRecordId) { this.packageRecordId = packageRecordId; }
     public LocalDateTime getExpireDate() { return expireDate; }    public void setExpireDate(LocalDateTime expireDate) { this.expireDate = expireDate; }
     public LocalDateTime getCreatedAt() { return createdAt; }    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

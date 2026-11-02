@@ -1,6 +1,7 @@
 package com.example.training.schedule.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.training.schedule.domain.model.Lesson;
 import com.example.training.schedule.domain.model.LessonStudent;
 import com.example.training.schedule.domain.model.ScheduleSeries;
@@ -13,6 +14,7 @@ import com.example.training.schedule.infrastructure.persistence.ScheduleSeriesEn
 import com.example.training.schedule.infrastructure.persistence.ScheduleSeriesMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,6 +29,7 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     private final ScheduleSeriesMapper scheduleSeriesMapper;
     private final LessonMapper lessonMapper;
     private final LessonStudentMapper lessonStudentMapper;
+    private final JdbcTemplate jdbcTemplate;
     
     @Override
     public ScheduleSeries saveScheduleSeries(ScheduleSeries series) {
@@ -41,7 +44,10 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public Optional<ScheduleSeries> findScheduleSeriesById(Long id) {
-        ScheduleSeriesEntity entity = scheduleSeriesMapper.selectById(id);
+        ScheduleSeriesEntity entity = scheduleSeriesMapper.selectOne(
+                new LambdaQueryWrapper<ScheduleSeriesEntity>()
+                        .eq(ScheduleSeriesEntity::getId, id)
+                        .isNull(ScheduleSeriesEntity::getDeletedAt));
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
     
@@ -50,8 +56,13 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
         LambdaQueryWrapper<ScheduleSeriesEntity> wrapper = new LambdaQueryWrapper<ScheduleSeriesEntity>()
                 .isNull(ScheduleSeriesEntity::getDeletedAt);
         if (teacherId != null) {
-            wrapper.eq(ScheduleSeriesEntity::getTeacherId, teacherId);
+            wrapper.and(w -> w.eq(ScheduleSeriesEntity::getTeacherId, teacherId)
+                    .or().eq(ScheduleSeriesEntity::getAssistantTeacherId1, teacherId)
+                    .or().eq(ScheduleSeriesEntity::getAssistantTeacherId2, teacherId));
         }
+        wrapper.orderByDesc(ScheduleSeriesEntity::getStartDate)
+                .orderByAsc(ScheduleSeriesEntity::getStartTime)
+                .orderByDesc(ScheduleSeriesEntity::getId);
         List<ScheduleSeriesEntity> entities = scheduleSeriesMapper.selectList(wrapper);
         return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
     }
@@ -96,7 +107,10 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public Optional<Lesson> findLessonById(Long id) {
-        LessonEntity entity = lessonMapper.selectById(id);
+        LessonEntity entity = lessonMapper.selectOne(
+                new LambdaQueryWrapper<LessonEntity>()
+                        .eq(LessonEntity::getId, id)
+                        .isNull(LessonEntity::getDeletedAt));
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
     
@@ -112,13 +126,22 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public List<Lesson> findByTeacherIdAndDate(Long teacherId, LocalDate date) {
+        return findByTeacherIdAndDateRange(teacherId, date, date);
+    }
+
+    @Override
+    public List<Lesson> findByTeacherIdAndDateRange(Long teacherId, LocalDate startDate, LocalDate endDate) {
         LambdaQueryWrapper<LessonEntity> wrapper = new LambdaQueryWrapper<LessonEntity>()
-                .eq(LessonEntity::getLessonDate, date)
+                .ge(LessonEntity::getLessonDate, startDate)
+                .le(LessonEntity::getLessonDate, endDate)
                 .isNull(LessonEntity::getDeletedAt);
         if (teacherId != null) {
-            wrapper.eq(LessonEntity::getTeacherId, teacherId);
+            wrapper.and(w -> w.eq(LessonEntity::getTeacherId, teacherId)
+                    .or().eq(LessonEntity::getAssistantTeacherId1, teacherId)
+                    .or().eq(LessonEntity::getAssistantTeacherId2, teacherId));
         }
-        wrapper.orderByAsc(LessonEntity::getStartTime);
+        wrapper.orderByAsc(LessonEntity::getLessonDate)
+                .orderByAsc(LessonEntity::getStartTime);
         List<LessonEntity> entities = lessonMapper.selectList(wrapper);
         return entities.stream().map(this::convertToDomain).collect(Collectors.toList());
     }
@@ -157,6 +180,52 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                         .orderByDesc(LessonEntity::getLessonDate)
         );
         return lessons.stream().map(this::convertToDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean existsLessonBySeriesIdAndDate(Long seriesId, LocalDate date) {
+        Long count = lessonMapper.selectCount(
+                new LambdaQueryWrapper<LessonEntity>()
+                        .eq(LessonEntity::getScheduleSeriesId, seriesId)
+                        .eq(LessonEntity::getLessonDate, date)
+                        .isNull(LessonEntity::getDeletedAt));
+        return count != null && count > 0;
+    }
+
+    @Override
+    public List<Long> findStudentIdsByScheduleSeriesId(Long seriesId) {
+        List<Long> persistedIds = jdbcTemplate.queryForList(
+                "SELECT student_id FROM schedule_series_student WHERE schedule_series_id = ?",
+                Long.class, seriesId);
+        List<Long> lessonIds = lessonMapper.selectList(
+                        new LambdaQueryWrapper<LessonEntity>()
+                                .eq(LessonEntity::getScheduleSeriesId, seriesId)
+                                .isNull(LessonEntity::getDeletedAt))
+                .stream().map(LessonEntity::getId).toList();
+        if (lessonIds.isEmpty()) return persistedIds;
+        List<Long> lessonStudentIds = lessonStudentMapper.selectList(
+                        new LambdaQueryWrapper<LessonStudentEntity>()
+                                .in(LessonStudentEntity::getLessonId, lessonIds))
+                .stream().map(LessonStudentEntity::getStudentId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        return java.util.stream.Stream.concat(persistedIds.stream(), lessonStudentIds.stream())
+                .filter(java.util.Objects::nonNull).distinct().toList();
+    }
+
+    @Override
+    public void replaceScheduleSeriesStudents(Long seriesId, List<Long> studentIds, Long createdBy) {
+        jdbcTemplate.update("DELETE FROM schedule_series_student WHERE schedule_series_id = ?", seriesId);
+        if (studentIds == null || studentIds.isEmpty()) return;
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO schedule_series_student(schedule_series_id, student_id, created_by) VALUES (?, ?, ?)",
+                studentIds,
+                studentIds.size(),
+                (ps, studentId) -> {
+                    ps.setLong(1, seriesId);
+                    ps.setLong(2, studentId);
+                    if (createdBy == null) ps.setNull(3, java.sql.Types.BIGINT);
+                    else ps.setLong(3, createdBy);
+                });
     }
     
     @Override
@@ -205,6 +274,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .courseId(series.getCourseId())
                 .classGroupId(series.getClassGroupId())
                 .teacherId(series.getTeacherId())
+                .assistantTeacherId1(series.getAssistantTeacherId1())
+                .assistantTeacherId2(series.getAssistantTeacherId2())
                 .recurrenceType(series.getRecurrenceType())
                 .weekdays(series.getWeekdays())
                 .startDate(series.getStartDate())
@@ -228,6 +299,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .courseId(entity.getCourseId())
                 .classGroupId(entity.getClassGroupId())
                 .teacherId(entity.getTeacherId())
+                .assistantTeacherId1(entity.getAssistantTeacherId1())
+                .assistantTeacherId2(entity.getAssistantTeacherId2())
                 .recurrenceType(entity.getRecurrenceType())
                 .weekdays(entity.getWeekdays())
                 .startDate(entity.getStartDate())
@@ -252,6 +325,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .courseId(lesson.getCourseId())
                 .classGroupId(lesson.getClassGroupId())
                 .teacherId(lesson.getTeacherId())
+                .assistantTeacherId1(lesson.getAssistantTeacherId1())
+                .assistantTeacherId2(lesson.getAssistantTeacherId2())
                 .lessonDate(lesson.getLessonDate())
                 .startTime(lesson.getStartTime())
                 .endTime(lesson.getEndTime())
@@ -279,6 +354,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
                 .courseId(entity.getCourseId())
                 .classGroupId(entity.getClassGroupId())
                 .teacherId(entity.getTeacherId())
+                .assistantTeacherId1(entity.getAssistantTeacherId1())
+                .assistantTeacherId2(entity.getAssistantTeacherId2())
                 .lessonDate(entity.getLessonDate())
                 .startTime(entity.getStartTime())
                 .endTime(entity.getEndTime())
@@ -340,11 +417,32 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     
     @Override
     public void deleteScheduleSeries(Long id) {
-        scheduleSeriesMapper.deleteById(id);
-        lessonMapper.delete(
-                new LambdaQueryWrapper<LessonEntity>()
+        LocalDateTime now = LocalDateTime.now();
+        scheduleSeriesMapper.update(null,
+                new LambdaUpdateWrapper<ScheduleSeriesEntity>()
+                        .eq(ScheduleSeriesEntity::getId, id)
+                        .isNull(ScheduleSeriesEntity::getDeletedAt)
+                        .set(ScheduleSeriesEntity::getStatus, "DELETED")
+                        .set(ScheduleSeriesEntity::getDeletedAt, now));
+        lessonMapper.update(null,
+                new LambdaUpdateWrapper<LessonEntity>()
                         .eq(LessonEntity::getScheduleSeriesId, id)
-        );
+                        .in(LessonEntity::getStatus, "PENDING", "IN_PROGRESS")
+                        .isNull(LessonEntity::getDeletedAt)
+                        .set(LessonEntity::getStatus, "CANCELLED")
+                        .set(LessonEntity::getCancelReason, "排课计划已删除")
+                        .set(LessonEntity::getUpdatedAt, now));
+    }
+
+    @Override
+    public void softDeletePendingLessonsBySeries(Long seriesId, LocalDate fromDate) {
+        lessonMapper.update(null,
+                new LambdaUpdateWrapper<LessonEntity>()
+                        .eq(LessonEntity::getScheduleSeriesId, seriesId)
+                        .ge(LessonEntity::getLessonDate, fromDate)
+                        .eq(LessonEntity::getStatus, "PENDING")
+                        .isNull(LessonEntity::getDeletedAt)
+                        .set(LessonEntity::getDeletedAt, LocalDateTime.now()));
     }
 
     @Override

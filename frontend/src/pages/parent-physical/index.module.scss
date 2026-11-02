@@ -8,6 +8,30 @@
   box-sizing: border-box;
 }
 
+.studentCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-lg;
+
+  .studentName {
+    display: block;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+
+  .studentNo {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  .arrow {
+    font-size: $font-size-xl;
+    color: $color-text-disabled;
+  }
+}
+
 .summaryCard {
   margin-bottom: $spacing-lg;
   padding: $spacing-lg;
@@ -197,8 +221,12 @@
 
 .modalBody {
   flex: 1;
-  padding: $spacing-lg;
+  padding: 0;
   max-height: 50vh;
+}
+
+.modalBodyInner {
+  padding: $spacing-lg;
 }
 
 .reportSummary {

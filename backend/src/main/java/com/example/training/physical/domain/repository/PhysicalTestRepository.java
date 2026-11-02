@@ -2,6 +2,7 @@ package com.example.training.physical.domain.repository;
 
 import com.example.training.physical.domain.model.PhysicalScoreStandard;
 import com.example.training.physical.domain.model.PhysicalTestItem;
+import com.example.training.physical.domain.model.PhysicalTestBatch;
 import com.example.training.physical.domain.model.PhysicalTestRecord;
 
 import java.time.LocalDate;
@@ -9,6 +10,14 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PhysicalTestRepository {
+
+    PhysicalTestBatch saveBatch(PhysicalTestBatch batch);
+
+    Optional<PhysicalTestBatch> findBatchById(Long id);
+
+    List<PhysicalTestBatch> findAvailableBatches();
+
+    Long findDefaultTemplateId();
 
     PhysicalTestItem saveItem(PhysicalTestItem item);
 

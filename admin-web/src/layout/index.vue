@@ -14,7 +14,7 @@
         </el-menu-item>
         <el-menu-item index="/users">
           <el-icon><el-icon-user /></el-icon>
-          <span>用户管理</span>
+          <span>教师/用户管理</span>
         </el-menu-item>
         <el-menu-item index="/students">
           <el-icon><el-icon-user-solid /></el-icon>
@@ -35,14 +35,6 @@
         <el-menu-item index="/hours">
           <el-icon><el-icon-clock /></el-icon>
           <span>课时管理</span>
-        </el-menu-item>
-        <el-menu-item index="/teacher/pre-register">
-          <el-icon><UserFilled /></el-icon>
-          <span>教师预登记</span>
-        </el-menu-item>
-        <el-menu-item index="/teacher/apply-review">
-          <el-icon><CircleCheckFilled /></el-icon>
-          <span>教师申请审核</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -93,14 +85,12 @@ const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => {
   const titleMap = {
     '/dashboard': '数据概览',
-    '/users': '用户管理',
+    '/users': '教师/用户管理',
     '/students': '学员管理',
     '/courses': '课程管理',
     '/schedules': '排课管理',
     '/physical': '体测管理',
-    '/hours': '课时管理',
-    '/teacher/pre-register': '教师预登记',
-    '/teacher/apply-review': '教师申请审核'
+    '/hours': '课时管理'
   }
   return titleMap[route.path] || ''
 })

@@ -31,10 +31,10 @@
       <el-table :data="tableData" class="custom-table" :row-class-name="tableRowClassName" style="width: 100%;">
         <el-table-column prop="id" label="申请ID" width="80" />
         <el-table-column prop="phone" label="手机" width="140" />
-        <el-table-column prop="name" label="姓名" min-width="110" />
-        <el-table-column prop="openid" label="微信OpenID" min-width="160">
+        <el-table-column prop="realName" label="姓名" min-width="110" />
+        <el-table-column prop="wechatOpenid" label="微信OpenID" min-width="160">
           <template #default="{ row }">
-            {{ maskOpenId(row.openid) }}
+            {{ maskOpenId(row.wechatOpenid) }}
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
@@ -44,10 +44,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="submitTime" label="提交时间" width="160" />
+        <el-table-column prop="createdAt" label="提交时间" width="180" />
         <el-table-column prop="reviewerId" label="审核人ID" width="100" />
         <el-table-column prop="reviewComment" label="审核备注" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="reviewTime" label="审核时间" width="160" />
+        <el-table-column prop="reviewedAt" label="审核时间" width="180" />
         <el-table-column label="操作" width="180">
           <template #default="{ row }">
             <div class="action-buttons">
@@ -83,7 +83,7 @@
     <el-dialog v-model="showReviewDialog" :title="reviewApprove ? '通过教师申请' : '驳回教师申请'" width="480px" class="custom-dialog">
       <el-form :model="reviewForm" class="modal-form">
         <el-form-item label="申请人">
-          <span>{{ reviewTarget.name || '-' }}（{{ reviewTarget.phone || '-' }}）</span>
+          <span>{{ reviewTarget.realName || '-' }}（{{ reviewTarget.phone || '-' }}）</span>
         </el-form-item>
         <el-form-item label="审核备注">
           <el-input
@@ -114,7 +114,7 @@ const searchForm = reactive({ keyword: '', status: '' })
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showReviewDialog = ref(false)
 const reviewApprove = ref(true)
-const reviewTarget = reactive({ id: '', name: '', phone: '' })
+const reviewTarget = reactive({ id: '', realName: '', phone: '' })
 const reviewForm = reactive({ comment: '' })
 
 const getStatusType = (status) => {
@@ -182,7 +182,7 @@ const handleCurrentChange = (page) => {
 
 const handleReview = (row, approve) => {
   reviewTarget.id = row?.id || ''
-  reviewTarget.name = row?.name || ''
+  reviewTarget.realName = row?.realName || ''
   reviewTarget.phone = row?.phone || ''
   reviewApprove.value = approve
   reviewForm.comment = ''

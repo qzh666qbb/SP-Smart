@@ -19,10 +19,7 @@
         <div class="stat-content">
           <p class="stat-number">{{ stats.users }}</p>
           <p class="stat-label">用户总数</p>
-          <div class="stat-trend up">
-            <el-icon size="12"><el-icon-trend-chart /></el-icon>
-            <span>+12% 较上月</span>
-          </div>
+          <div class="stat-live">实时数据</div>
         </div>
       </div>
 
@@ -33,10 +30,7 @@
         <div class="stat-content">
           <p class="stat-number">{{ stats.students }}</p>
           <p class="stat-label">学员总数</p>
-          <div class="stat-trend up">
-            <el-icon size="12"><el-icon-trend-chart /></el-icon>
-            <span>+8% 较上月</span>
-          </div>
+          <div class="stat-live">实时数据</div>
         </div>
       </div>
 
@@ -47,10 +41,7 @@
         <div class="stat-content">
           <p class="stat-number">{{ stats.courses }}</p>
           <p class="stat-label">课程总数</p>
-          <div class="stat-trend up">
-            <el-icon size="12"><el-icon-trend-chart /></el-icon>
-            <span>+5% 较上月</span>
-          </div>
+          <div class="stat-live">实时数据</div>
         </div>
       </div>
 
@@ -61,10 +52,7 @@
         <div class="stat-content">
           <p class="stat-number">{{ stats.schedules }}</p>
           <p class="stat-label">今日课程</p>
-          <div class="stat-trend down">
-            <el-icon size="12"><el-icon-trend-chart /></el-icon>
-            <span>-2 较昨日</span>
-          </div>
+          <div class="stat-live">今日实时数据</div>
         </div>
       </div>
     </div>
@@ -139,6 +127,7 @@
               <span class="bar-label">{{ item.label }}</span>
               <span class="bar-value">{{ item.value }}h</span>
             </div>
+            <div v-if="hourStats.length === 0" class="empty-state">最近 7 天暂无课时消耗</div>
           </div>
         </div>
       </div>
@@ -149,7 +138,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getUsers, getStudents, getCourses, getLessons, getPhysicalTests, readList } from '@/api'
+import { getUsers, getStudents, getCourses, getLessons, getPhysicalTests, getHourConsumeStats, readList, readTotal } from '@/api'
 
 const router = useRouter()
 
@@ -165,15 +154,7 @@ const stats = reactive({
 const todayLessons = ref([])
 const recentPhysical = ref([])
 
-const hourStats = ref([
-  { label: '周一', value: 12, percent: 60 },
-  { label: '周二', value: 8, percent: 40 },
-  { label: '周三', value: 15, percent: 75 },
-  { label: '周四', value: 10, percent: 50 },
-  { label: '周五', value: 18, percent: 90 },
-  { label: '周六', value: 20, percent: 100 },
-  { label: '周日', value: 14, percent: 70 }
-])
+const hourStats = ref([])
 
 const currentDate = computed(() => {
   const date = new Date()
@@ -210,39 +191,70 @@ const goToPhysical = () => {
 }
 
 const fetchStats = async () => {
-  try {
-    const users = await getUsers()
-    const userArr = readList(users)
-    stats.users = userArr.length || 0
-
-    const students = await getStudents()
-    const stuArr = readList(students)
-    stats.students = stuArr.length || 0
-
-    const courses = await getCourses()
-    const courseArr = readList(courses)
-    stats.courses = courseArr.length || 0
-
-    const today = new Date().toISOString().split('T')[0]
-    const lessons = await getLessons({ date: today })
-    const lessonArr = readList(lessons)
-    stats.schedules = lessonArr.length || 0
-    todayLessons.value = lessonArr.slice(0, 5).map(l => ({
-      ...l,
-      courseName: l.courseName || '体育课',
-      teacherName: l.teacherName || '张老师'
-    }))
-
-    const physical = await getPhysicalTests()
-    const phyArr = readList(physical)
-    recentPhysical.value = phyArr.slice(0, 5).map(p => ({
-      ...p,
-      studentName: p.studentName || '--',
-      teacherName: p.teacherName || '--'
-    }))
-  } catch (err) {
-    console.error(err)
+  const formatLocalDate = date => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
+
+  const today = formatLocalDate(new Date())
+  const end = new Date()
+  const start = new Date(end)
+  start.setDate(start.getDate() - 6)
+
+  const results = await Promise.allSettled([
+    getUsers({ pageNum: 1, pageSize: 1 }),
+    getStudents({ pageNum: 1, pageSize: 1 }),
+    getCourses({ pageNum: 1, pageSize: 1 }),
+    getLessons({ date: today }),
+    getPhysicalTests({ pageNum: 1, pageSize: 5 }),
+    getHourConsumeStats({ startDate: formatLocalDate(start), endDate: today, courseType: 'ALL' })
+  ])
+
+  const [usersResult, studentsResult, coursesResult, lessonsResult, physicalResult, consumeResult] = results
+
+  if (usersResult.status === 'fulfilled') {
+    const rows = readList(usersResult.value)
+    stats.users = readTotal(usersResult.value, rows.length)
+  }
+  if (studentsResult.status === 'fulfilled') {
+    const rows = readList(studentsResult.value)
+    stats.students = readTotal(studentsResult.value, rows.length)
+  }
+  if (coursesResult.status === 'fulfilled') {
+    const rows = readList(coursesResult.value)
+    stats.courses = readTotal(coursesResult.value, rows.length)
+  }
+  if (lessonsResult.status === 'fulfilled') {
+    const rows = readList(lessonsResult.value)
+    stats.schedules = readTotal(lessonsResult.value, rows.length)
+    todayLessons.value = rows.slice(0, 5).map(lesson => ({
+      ...lesson,
+      courseName: lesson.courseName || '体育课',
+      teacherName: lesson.teacherName || '--'
+    }))
+  }
+  if (physicalResult.status === 'fulfilled') {
+    recentPhysical.value = readList(physicalResult.value).slice(0, 5).map(record => ({
+      ...record,
+      studentName: record.studentName || '--',
+      teacherName: record.teacherName || '--'
+    }))
+  }
+  if (consumeResult.status === 'fulfilled') {
+    const entries = Object.entries(consumeResult.value?.byCourseType || {})
+      .map(([label, raw]) => ({ label, value: Number(raw) || 0 }))
+    const max = Math.max(0, ...entries.map(item => item.value))
+    hourStats.value = entries.map(item => ({
+      ...item,
+      percent: max > 0 ? Math.max(8, item.value / max * 100) : 0
+    }))
+  }
+
+  results.forEach(result => {
+    if (result.status === 'rejected') console.error('[Dashboard.fetchStats]', result.reason)
+  })
 }
 
 onMounted(() => {
@@ -359,22 +371,11 @@ onMounted(() => {
   margin: 4px 0 8px 0;
 }
 
-.stat-trend {
+.stat-live {
   display: flex;
   align-items: center;
   font-size: 12px;
-}
-
-.stat-trend.up {
-  color: #10b981;
-}
-
-.stat-trend.down {
-  color: #ef4444;
-}
-
-.stat-trend :deep(.el-icon) {
-  margin-right: 4px;
+  color: #64748b;
 }
 
 .content-grid {

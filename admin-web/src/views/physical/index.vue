@@ -5,10 +5,13 @@
         <h2>体测管理</h2>
         <p class="page-desc">管理学员体测记录，包括测试数据和评估结果</p>
       </div>
-      <el-button type="primary" class="btn-primary" @click="handleAdd">
-        <el-icon><el-icon-plus /></el-icon>
-        新增体测记录
-      </el-button>
+      <div class="action-buttons">
+        <el-button @click="showBatchModal = true">新建体测批次</el-button>
+        <el-button type="primary" class="btn-primary" @click="handleAdd">
+          <el-icon><el-icon-plus /></el-icon>
+          新增体测记录
+        </el-button>
+      </div>
     </div>
     
     <div class="page-card">
@@ -57,13 +60,11 @@
       </div>
     </div>
 
-    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑体测记录' : '新增体测记录'" width="640px" class="custom-dialog">
+    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑体测记录' : '新增体测记录'" width="780px" class="custom-dialog">
       <el-form :model="form" :rules="rules" ref="formRef" class="modal-form" label-width="110px">
         <el-form-item prop="batchId" label="体测批次">
           <el-select v-model="form.batchId" placeholder="请选择批次" style="width: 100%">
-            <el-option label="默认批次 (1)" :value="1" />
-            <el-option label="批次 2" :value="2" />
-            <el-option label="批次 3" :value="3" />
+            <el-option v-for="batch in batches" :key="batch.id" :label="`${batch.batchName}（${batch.testDate}）`" :value="batch.id" />
           </el-select>
         </el-form-item>
         <el-form-item prop="studentId" label="学员">
@@ -76,17 +77,37 @@
         </el-form-item>
         <el-divider content-position="left">成绩录入</el-divider>
         <div v-for="(score, idx) in form.scores" :key="idx" class="score-row">
-          <div class="score-label" style="width: 130px; margin-right: 12px">
+          <div class="score-label">
             <span class="score-name">{{ score.itemName || `指标 ${idx + 1}` }}</span>
             <span v-if="score.unit" class="score-unit">（{{ score.unit }}）</span>
           </div>
-          <el-form-item :prop="`scores.${idx}.rawValue`" label="原始值" label-width="80px" style="flex: 1; margin-right: 12px">
-            <el-input-number v-model="score.rawValue" :min="0" :max="9999" :step="0.01" :precision="2" style="width: 100%" />
+          <el-form-item :prop="`scores.${idx}.rawValue`" label="成绩" class="score-field">
+            <el-input
+              v-model="score.rawValue"
+              type="number"
+              inputmode="decimal"
+              min="-9999"
+              max="9999"
+              step="0.01"
+              placeholder="输入"
+              style="width: 100%"
+            >
+              <template v-if="score.unit" #append>{{ score.unit }}</template>
+            </el-input>
           </el-form-item>
-          <el-form-item :prop="`scores.${idx}.convertedScore`" label="得分" label-width="60px" style="flex: 1; margin-right: 12px">
-            <el-input-number v-model="score.convertedScore" :min="0" :max="100" :step="0.5" :precision="1" style="width: 100%" />
+          <el-form-item :prop="`scores.${idx}.convertedScore`" label="得分" class="score-field">
+            <el-input
+              v-model="score.convertedScore"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              max="100"
+              step="0.01"
+              placeholder="输入"
+              style="width: 100%"
+            />
           </el-form-item>
-          <el-form-item :prop="`scores.${idx}.level`" label="等级" label-width="60px" style="flex: 1">
+          <el-form-item :prop="`scores.${idx}.level`" label="等级" class="score-field">
             <el-select v-model="score.level" placeholder="等级" clearable style="width: 100%">
               <el-option label="优秀" value="EXCELLENT" />
               <el-option label="良好" value="GOOD" />
@@ -105,46 +126,39 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showReportModal" title="体测报告" width="620px" class="custom-dialog">
-      <div v-if="selectedRecord" class="report-content">
-        <div class="report-header">
-          <div class="report-title">体测报告</div>
-          <div class="report-date">{{ selectedRecord.testDate }}</div>
-        </div>
-        <div class="report-body">
-          <div class="report-info">
-            <div class="info-item">
-              <span class="info-label">学员姓名</span>
-              <span class="info-value">{{ selectedRecord.studentName }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">测试老师</span>
-              <span class="info-value">{{ selectedRecord.teacherName }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">综合得分</span>
-              <span class="info-value score">{{ selectedRecord.totalScore }}</span>
-            </div>
-          </div>
-          <div class="report-scores">
-            <div class="section-title">各项指标</div>
-            <div v-if="selectedRecord.scores" class="scores-list">
-              <div v-for="(score, index) in selectedRecord.scores" :key="index" class="score-item">
-                <span class="score-name">{{ score.itemName }}</span>
-                <span class="score-value">{{ score.score }}</span>
-                <span class="score-unit">{{ score.unit }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="report-evaluation">
-            <div class="section-title">评估结果</div>
-            <div class="evaluation-text">{{ selectedRecord.evaluation }}</div>
-          </div>
-        </div>
+    <el-dialog v-model="showBatchModal" title="新建体测批次" width="460px" class="custom-dialog">
+      <el-form :model="batchForm" label-width="90px">
+        <el-form-item label="批次名称" required>
+          <el-input v-model="batchForm.batchName" maxlength="100" placeholder="例如：2026年秋季体测" />
+        </el-form-item>
+        <el-form-item label="测试日期" required>
+          <el-date-picker v-model="batchForm.testDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="测试地点">
+          <el-input v-model="batchForm.location" maxlength="255" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBatchModal = false">取消</el-button>
+        <el-button type="primary" @click="handleCreateBatch">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="showReportModal"
+      title="个人体质成长报告预览"
+      width="900px"
+      class="custom-dialog report-dialog"
+      destroy-on-close
+    >
+      <div v-loading="reportLoading" class="report-preview-wrap">
+        <PhysicalGrowthReport v-if="selectedRecord" ref="reportPreviewRef" :report="selectedRecord" />
       </div>
       <template #footer>
         <el-button @click="showReportModal = false">关闭</el-button>
-        <el-button type="primary" @click="handleDownload">下载报告</el-button>
+        <el-button type="primary" :loading="pdfExporting" :disabled="!selectedRecord" @click="handleDownload">
+          {{ pdfExporting ? '正在生成 PDF' : '下载 PDF' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -153,26 +167,35 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getPhysicalTests, createPhysicalTest, updatePhysicalTest, deletePhysicalTest, getStudents, getPhysicalItems } from '@/api'
+import PhysicalGrowthReport from '@/components/PhysicalGrowthReport.vue'
+import { getPhysicalTests, createPhysicalTest, updatePhysicalTest, deletePhysicalTest, getAllStudents, getPhysicalItems, getPhysicalBatches, createPhysicalBatch, getPhysicalReport } from '@/api'
+import { exportElementToPdf } from '@/utils/exportReportPdf'
 
 const tableData = ref([])
 const students = ref([])
 const physicalItems = ref([])
+const batches = ref([])
 const searchForm = reactive({ keyword: '', date: '' })
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showAddModal = ref(false)
+const showBatchModal = ref(false)
 const showReportModal = ref(false)
+const reportLoading = ref(false)
+const pdfExporting = ref(false)
+const reportPreviewRef = ref(null)
 const selectedRecord = ref(null)
 const isEdit = ref(false)
 const formRef = ref(null)
+const today = () => new Date().toISOString().slice(0, 10)
+const batchForm = reactive({ batchName: '', testDate: today(), location: '' })
 
 const defaultScoreRow = () => ({
   itemId: 0,
   itemName: '',
   itemCode: '',
   unit: '',
-  rawValue: 0,
-  convertedScore: 0,
+  rawValue: '',
+  convertedScore: '',
   level: '',
   remark: ''
 })
@@ -184,22 +207,18 @@ const buildScoresFromItems = (items) => {
       itemName: it.itemName || it.name || '',
       itemCode: it.itemCode || '',
       unit: it.unit || '',
-      rawValue: 0,
-      convertedScore: 0,
+      rawValue: '',
+      convertedScore: '',
       level: '',
       remark: ''
     }))
   }
-  return [
-    { ...defaultScoreRow(), itemName: '50米跑', unit: '秒', itemId: 1 },
-    { ...defaultScoreRow(), itemName: '立定跳远', unit: '厘米', itemId: 2 },
-    { ...defaultScoreRow(), itemName: '仰卧起坐', unit: '次/分钟', itemId: 3 }
-  ]
+  return []
 }
 
 const form = reactive({
   id: '',
-  batchId: 1,
+  batchId: '',
   studentId: '',
   testDate: '',
   remark: '',
@@ -217,13 +236,17 @@ const tableRowClassName = ({ rowIndex }) => {
   return ''
 }
 
+let fetchRequestId = 0
 const fetchData = async () => {
+  const requestId = ++fetchRequestId
   try {
     const res = await getPhysicalTests({ ...searchForm, ...pagination })
+    if (requestId !== fetchRequestId) return
     tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
     pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    if (requestId !== fetchRequestId) return
     tableData.value = []
     pagination.total = 0
   }
@@ -231,8 +254,7 @@ const fetchData = async () => {
 
 const fetchStudents = async () => {
   try {
-    const res = await getStudents({ pageNum: 1, pageSize: 200 })
-    students.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    students.value = await getAllStudents()
   } catch (err) {
     console.error(err)
     students.value = []
@@ -249,6 +271,34 @@ const fetchPhysicalItems = async () => {
   }
 }
 
+const fetchBatches = async () => {
+  try {
+    const res = await getPhysicalBatches()
+    batches.value = Array.isArray(res) ? res : []
+  } catch (err) {
+    console.error(err)
+    batches.value = []
+  }
+}
+
+const handleCreateBatch = async () => {
+  if (!batchForm.batchName.trim() || !batchForm.testDate) {
+    ElMessage.error('请填写批次名称和测试日期')
+    return
+  }
+  try {
+    const created = await createPhysicalBatch({ ...batchForm, batchName: batchForm.batchName.trim() })
+    await fetchBatches()
+    form.batchId = created?.id || batches.value[0]?.id || ''
+    batchForm.batchName = ''
+    batchForm.testDate = today()
+    batchForm.location = ''
+    showBatchModal.value = false
+  } catch (err) {
+    ElMessage.error(err?.message || '批次创建失败')
+  }
+}
+
 const handleSearch = () => { pagination.page = 1; fetchData() }
 const resetSearch = () => { searchForm.keyword = ''; searchForm.date = ''; pagination.page = 1; fetchData() }
 const handleSizeChange = (size) => { pagination.size = size; fetchData() }
@@ -256,7 +306,7 @@ const handleCurrentChange = (page) => { pagination.page = page; fetchData() }
 
 const resetForm = () => {
   form.id = ''
-  form.batchId = 1
+  form.batchId = batches.value[0]?.id || ''
   form.studentId = ''
   form.testDate = ''
   form.remark = ''
@@ -264,14 +314,35 @@ const resetForm = () => {
 }
 
 const handleAdd = () => {
+  if (batches.value.length === 0) {
+    ElMessage.error('请先创建体测批次')
+    return
+  }
+  if (physicalItems.value.length === 0) {
+    ElMessage.error('体测项目未加载，暂时不能录入')
+    return
+  }
   isEdit.value = false
   resetForm()
   showAddModal.value = true
 }
 
-const handleView = (row) => {
-  selectedRecord.value = row
+const handleView = async (row) => {
+  if (!row?.studentId) {
+    ElMessage.error('该记录缺少学员信息，无法生成报告')
+    return
+  }
+  selectedRecord.value = null
   showReportModal.value = true
+  reportLoading.value = true
+  try {
+    selectedRecord.value = await getPhysicalReport(row.studentId)
+  } catch (err) {
+    showReportModal.value = false
+    ElMessage.error(err?.message || '报告加载失败')
+  } finally {
+    reportLoading.value = false
+  }
 }
 
 const handleEdit = (row) => {
@@ -307,16 +378,20 @@ const handleSubmit = async () => {
     if (!valid) return
     try {
       const scores = (Array.isArray(form.scores) ? form.scores : [])
-        .filter(s => s && (Number(s.rawValue) > 0 || Number(s.convertedScore) > 0 || s.itemId > 0))
-        .map(s => ({
-          itemId: Number(s.itemId) || 0,
-          rawValue: Number(s.rawValue) || 0,
-          convertedScore: Number(s.convertedScore) || 0,
-          level: s.level || null,
-          remark: s.remark || null
-        }))
+        .filter(s => s && (s.rawValue !== '' || s.convertedScore !== '' || s.itemId > 0))
+        .map(s => {
+          const rawValue = parseScoreNumber(s.rawValue, `${s.itemName || '体测项目'}成绩`, -9999, 9999)
+          const convertedScore = parseScoreNumber(s.convertedScore, `${s.itemName || '体测项目'}得分`, 0, 100)
+          return {
+            itemId: Number(s.itemId) || 0,
+            rawValue,
+            convertedScore,
+            level: s.level || null,
+            remark: s.remark || null
+          }
+        })
       const payload = {
-        batchId: Number(form.batchId) || 1,
+        batchId: Number(form.batchId),
         studentId: Number(form.studentId) || 0,
         testDate: form.testDate,
         scores,
@@ -337,11 +412,43 @@ const handleSubmit = async () => {
   })
 }
 
-const handleDownload = () => {
-  ElMessage.info('报告下载中...')
+const parseScoreNumber = (value, label, min, max) => {
+  if (value === '' || value === null || value === undefined) {
+    throw new Error(`请输入${label}`)
+  }
+  const number = Number(value)
+  if (!Number.isFinite(number)) {
+    throw new Error(`${label}必须是有效数字`)
+  }
+  if (number < min || number > max) {
+    throw new Error(`${label}必须在 ${min}～${max} 之间`)
+  }
+  return number
+}
+
+const handleDownload = async () => {
+  const element = reportPreviewRef.value?.getElement?.()
+  if (!element || !selectedRecord.value || pdfExporting.value) return
+  pdfExporting.value = true
+  try {
+    const info = selectedRecord.value.basic_info || {}
+    const safeName = String(info.name || '学员').replace(/[\\/:*?"<>|]/g, '_')
+    const safeDate = String(info.report_date || '').replace(/[^0-9-]/g, '')
+    const filename = `${safeName}-个人体质成长报告${safeDate ? `-${safeDate}` : ''}.pdf`
+    const result = await exportElementToPdf(element, filename)
+    if (result !== 'cancelled') {
+      ElMessage.success(result === 'saved' ? 'PDF 已保存到选定位置' : 'PDF 已下载')
+    }
+  } catch (err) {
+    console.error(err)
+    ElMessage.error(err?.message || 'PDF 生成失败')
+  } finally {
+    pdfExporting.value = false
+  }
 }
 
 fetchPhysicalItems()
+fetchBatches()
 fetchData()
 fetchStudents()
 </script>
@@ -553,6 +660,107 @@ fetchStudents()
   font-weight: 500;
 }
 
+.score-row {
+  display: grid;
+  grid-template-columns: 140px repeat(3, minmax(0, 1fr));
+  column-gap: 16px;
+  align-items: center;
+  padding: 15px 18px;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+}
+
+.score-label {
+  min-width: 0;
+  line-height: 20px;
+}
+
+.score-label .score-name {
+  display: block;
+  overflow: hidden;
+  color: #1f2937;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-label .score-unit {
+  display: block;
+  margin: 2px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: left;
+}
+
+.score-field {
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  margin: 0 !important;
+}
+
+.score-field :deep(.el-form-item__label) {
+  display: flex;
+  width: 42px !important;
+  height: 40px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px 0 0;
+  line-height: 40px;
+  text-align: left;
+}
+
+.score-field :deep(.el-form-item__content) {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  margin-left: 0 !important;
+  line-height: normal;
+}
+
+.score-field :deep(.el-input),
+.score-field :deep(.el-select) {
+  width: 100%;
+}
+
+.score-field :deep(.el-input__wrapper),
+.score-field :deep(.el-select__wrapper) {
+  min-height: 40px;
+}
+
+.score-field :deep(input[type='number']) {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.score-field :deep(input[type='number']::-webkit-inner-spin-button),
+.score-field :deep(input[type='number']::-webkit-outer-spin-button) {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+@media (max-width: 760px) {
+  .score-row {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 10px;
+  }
+
+  .score-label {
+    grid-column: 1 / -1;
+    padding-top: 0;
+  }
+
+  .score-field {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+}
+
 .modal-form :deep(.el-input__wrapper),
 .modal-form :deep(.el-select__wrapper),
 .modal-form :deep(.el-date-picker__wrapper) {
@@ -562,6 +770,19 @@ fetchStudents()
 
 .report-content {
   padding: 8px 0;
+}
+
+.report-preview-wrap {
+  min-height: 320px;
+  overflow-x: auto;
+  padding: 8px 0 18px;
+  background: #eef4f1;
+}
+
+:deep(.report-dialog .el-dialog__body) {
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+  padding: 0 20px;
 }
 
 .report-header {

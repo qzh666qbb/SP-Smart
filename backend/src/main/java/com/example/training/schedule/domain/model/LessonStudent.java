@@ -16,6 +16,8 @@ public class LessonStudent {
     private Long id;
     private Long lessonId;
     private Long studentId;
+    private String studentName;
+    private String studentNo;
     private String attendanceStatus;
     private LocalDateTime signInAt;
     private BigDecimal consumeHours;
@@ -48,6 +50,8 @@ public class LessonStudent {
     public Long getId() { return id; }    public void setId(Long id) { this.id = id; }
     public Long getLessonId() { return lessonId; }    public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
     public Long getStudentId() { return studentId; }    public void setStudentId(Long studentId) { this.studentId = studentId; }
+    public String getStudentName() { return studentName; }    public void setStudentName(String studentName) { this.studentName = studentName; }
+    public String getStudentNo() { return studentNo; }    public void setStudentNo(String studentNo) { this.studentNo = studentNo; }
     public String getAttendanceStatus() { return attendanceStatus; }    public void setAttendanceStatus(String attendanceStatus) { this.attendanceStatus = attendanceStatus; }
     public LocalDateTime getSignInAt() { return signInAt; }    public void setSignInAt(LocalDateTime signInAt) { this.signInAt = signInAt; }
     public BigDecimal getConsumeHours() { return consumeHours; }    public void setConsumeHours(BigDecimal consumeHours) { this.consumeHours = consumeHours; }

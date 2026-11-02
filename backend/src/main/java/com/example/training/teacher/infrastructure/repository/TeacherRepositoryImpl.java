@@ -136,6 +136,12 @@ public class TeacherRepositoryImpl implements TeacherRepository {
     }
 
     @Override
+    public Optional<TeacherPreRegister> findPreRegisterById(Long id) {
+        return Optional.ofNullable(teacherPreRegisterMapper.selectById(id))
+                .map(this::convertPreRegisterToDomain);
+    }
+
+    @Override
     public List<TeacherPreRegister> findPreRegisters(String keyword, int pageNum, int pageSize) {
         Page<TeacherPreRegisterEntity> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<TeacherPreRegisterEntity> wrapper = buildPreRegisterFilterWrapper(keyword);

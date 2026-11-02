@@ -26,7 +26,7 @@
 
       <el-table :data="tableData" class="custom-table" :row-class-name="tableRowClassName" style="width: 100%;">
         <el-table-column prop="phone" label="手机号" width="140" />
-        <el-table-column prop="name" label="姓名" min-width="120" />
+        <el-table-column prop="realName" label="姓名" min-width="120" />
         <el-table-column prop="createdBy" label="创建人" width="100" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
@@ -35,7 +35,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" width="160" />
+        <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
             <div class="action-buttons">
@@ -173,7 +173,7 @@ const handleSubmitAdd = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     try {
-      await preRegisterTeacher({ phone: form.phone.trim(), name: form.name.trim() })
+      await preRegisterTeacher({ phone: form.phone.trim(), realName: form.name.trim() })
       ElMessage.success('新增预登记成功')
       showAddModal.value = false
       fetchData()

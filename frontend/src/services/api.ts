@@ -1,9 +1,26 @@
 import { get, post } from '@/utils/request';
 import { callWithFallback } from './cloud';
-import { LoginParams, LoginResult, User, TeacherProfile, ParentProfile, Student } from '@/types';
-import { Lesson, PhysicalTestRecord, StudentHourAccount, HourTransaction } from '@/types';
+import { collectPages } from '@/utils/pagination';
+import { LoginParams, LoginResult, User, UserRole, TeacherProfile, ParentProfile, Student } from '@/types';
+import { Lesson, PhysicalTestRecord, PhysicalScoreDetail, StudentHourAccount, HourTransaction } from '@/types';
 
 type AnyMap = Record<string, any>;
+
+interface PhysicalScoreResponse {
+  id?: string | number | null;
+  recordId?: string | number | null;
+  itemId?: string | number | null;
+  itemName?: string | null;
+  rawValue?: number | null;
+  convertedScore?: number | null;
+  level?: PhysicalScoreDetail['level'] | null;
+  remark?: string | null;
+  score?: number | null;
+  unit?: string | null;
+  name?: string | null;
+  value?: number | null;
+  convertedLevel?: PhysicalScoreDetail['level'] | null;
+}
 
 function toIdStr(v: any): string {
   return v == null ? '' : String(v);
@@ -14,19 +31,22 @@ function buildUserFromAuth(data: AnyMap | null): User {
   return {
     id: toIdStr(d.userId ?? d.id),
     username: d.username || '',
+    nickname: d.nickname || undefined,
     role: (d.role as any) || 'TEACHER',
     phone: d.phone || undefined,
     avatar: d.avatar || undefined,
+    wechatBound: Boolean(d.wechatBound),
+    profileComplete: Boolean(d.profileComplete),
   };
 }
 
 function buildProfileFromAuth(data: AnyMap | null): TeacherProfile | ParentProfile | null {
   const d = data || {};
   const role = d.role;
-  const pid = toIdStr(d.profileId ?? d.userId ?? d.id);
+  const pid = toIdStr(d.profileId);
   const uid = toIdStr(d.userId ?? d.id);
   if (!pid) return null;
-  const name = d.username || (role === 'PARENT' ? '家长' : '老师');
+  const name = d.nickname || d.username || (role === 'PARENT' ? '家长' : '老师');
   if (role === 'PARENT') {
     const pp: ParentProfile = {
       id: pid,
@@ -71,34 +91,62 @@ function toStudent(d: AnyMap | null | undefined): Student {
 
 function toLesson(d: AnyMap | null | undefined): Lesson {
   if (!d) return {} as any;
+  const rawStatus = d.status || 'PENDING';
   return {
     id: toIdStr(d.id),
     lessonNo: d.lessonNo || '',
     courseId: d.courseId != null ? toIdStr(d.courseId) : '',
     classGroupId: d.classGroupId != null ? toIdStr(d.classGroupId) : '',
     teacherId: d.teacherId != null ? toIdStr(d.teacherId) : '',
+    courseName: d.courseName || undefined,
+    teacherName: d.teacherName || undefined,
     lessonDate: d.lessonDate || '',
     startTime: d.startTime || '',
     endTime: d.endTime || '',
-    status: d.status || 'SCHEDULED',
+    status: rawStatus === 'PENDING' ? 'SCHEDULED' : rawStatus,
+    cancelReason: d.cancelReason || undefined,
     location: d.location || undefined,
     consumeHours: d.consumeHours ?? undefined,
+    createTime: d.createdAt || d.createTime || undefined,
+    studentAttendance: d.studentAttendance && typeof d.studentAttendance === 'object'
+      ? d.studentAttendance
+      : undefined,
   };
 }
 
 function toPhysicalRecord(d: AnyMap | null | undefined): PhysicalTestRecord {
   if (!d) return {} as any;
+  const rawDetails: PhysicalScoreResponse[] = Array.isArray(d.details) ? d.details : (Array.isArray(d.scores) ? d.scores : []);
+  const details: PhysicalScoreDetail[] = rawDetails.map((item) => ({
+    id: item.id == null ? undefined : toIdStr(item.id),
+    recordId: item.recordId == null ? undefined : toIdStr(item.recordId),
+    itemId: toIdStr(item.itemId),
+    itemName: item.itemName ?? item.name ?? undefined,
+    rawValue: item.rawValue ?? item.value ?? undefined,
+    convertedScore: item.convertedScore ?? item.score ?? undefined,
+    level: item.level ?? item.convertedLevel ?? undefined,
+    remark: item.remark ?? undefined,
+    score: item.score ?? item.convertedScore ?? undefined,
+    unit: item.unit ?? undefined,
+  }));
   return {
     id: toIdStr(d.id),
+    recordNo: d.recordNo || undefined,
     studentId: toIdStr(d.studentId),
     testerId: d.testerId != null ? toIdStr(d.testerId) : undefined,
     testDate: d.testDate || d.createTime || '',
     status: d.status || 'DRAFT',
     totalScore: d.totalScore ?? undefined,
+    overallLevel: d.overallLevel ?? undefined,
     gradeLevel: d.gradeLevel ?? undefined,
     scoreLevel: d.scoreLevel ?? undefined,
-    details: Array.isArray(d.details) ? d.details : [],
-    items: Array.isArray(d.items) ? d.items : [],
+    remark: d.remark ?? undefined,
+    teacherName: d.teacherName ?? undefined,
+    studentName: d.studentName ?? undefined,
+    createTime: d.createdAt || d.createTime || undefined,
+    scores: details,
+    details,
+    items: details,
   };
 }
 
@@ -148,7 +196,7 @@ export const login = async (params: LoginParams): Promise<LoginResult> => {
     const token: string = body?.accessToken || body?.token || '';
     const user = buildUserFromAuth(body);
     const profile = buildProfileFromAuth(body);
-    return { token, user, profile };
+    return { token, refreshToken: body?.refreshToken || undefined, user, profile };
   }, undefined);
 };
 
@@ -168,51 +216,70 @@ export async function registerParent(params: {
     const token: string = body?.accessToken || body?.token || '';
     const user = buildUserFromAuth(body);
     const profile = buildProfileFromAuth(body);
-    return { token, user, profile };
-  }, undefined);
-}
-
-export async function wechatExchangeCode(
-  code: string,
-  phoneEncryptedData?: string,
-  phoneIv?: string
-): Promise<{
-  openid: string;
-  unionid?: string;
-  phone?: string;
-  needReview?: boolean;
-  pendingRole?: string;
-  pendingApplyId?: number | string;
-}> {
-  return callWithFallback(async () => {
-    const payload: AnyMap = { code };
-    if (phoneEncryptedData) payload.phoneEncryptedData = phoneEncryptedData;
-    if (phoneIv) payload.phoneIv = phoneIv;
-    const body: AnyMap = await post<AnyMap>('/auth/wechat/exchange', payload);
-    return {
-      openid: body?.openid || '',
-      unionid: body?.unionid ?? undefined,
-      phone: body?.phone ?? undefined,
-      needReview: body?.needReview ?? undefined,
-      pendingRole: body?.pendingRole ?? undefined,
-      pendingApplyId: body?.pendingApplyId ?? undefined,
-    };
+    return { token, refreshToken: body?.refreshToken || undefined, user, profile };
   }, undefined);
 }
 
 export async function wechatLogin(
-  openid: string,
-  unionid?: string | null
+  code: string,
+  role: Extract<UserRole, 'TEACHER' | 'PARENT'>,
+  wechatProfile?: { avatarUrl?: string; nickName?: string }
 ): Promise<LoginResult> {
   return callWithFallback(async () => {
-    const payload: AnyMap = { openid };
-    if (unionid != null) payload.unionid = unionid;
+    const payload: AnyMap = { code, role };
+    if (wechatProfile?.avatarUrl) payload.avatarUrl = wechatProfile.avatarUrl;
+    if (wechatProfile?.nickName) payload.nickname = wechatProfile.nickName;
     const body: AnyMap = await post<AnyMap>('/auth/login/wechat', payload);
     const token: string = body?.accessToken || body?.token || '';
     const user = buildUserFromAuth(body);
     const profile = buildProfileFromAuth(body);
-    return { token, user, profile };
+    return { token, refreshToken: body?.refreshToken || undefined, user, profile };
   }, undefined);
+}
+
+export async function bindWechat(
+  code: string,
+  wechatProfile?: { avatarUrl?: string; nickName?: string }
+): Promise<LoginResult> {
+  const body: AnyMap = await post<AnyMap>('/auth/wechat/bind', {
+    code,
+    avatarUrl: wechatProfile?.avatarUrl,
+    nickname: wechatProfile?.nickName,
+  });
+  return {
+    token: body?.accessToken || '',
+    refreshToken: body?.refreshToken || undefined,
+    user: buildUserFromAuth(body),
+    profile: buildProfileFromAuth(body),
+  };
+}
+
+export async function completeParentProfile(params: {
+  name: string;
+  phone: string;
+  relation: 'FATHER' | 'MOTHER' | 'GUARDIAN' | 'OTHER';
+}): Promise<LoginResult> {
+  const body: AnyMap = await post<AnyMap>('/auth/parent/profile/complete', params);
+  return {
+    token: body?.accessToken || '',
+    refreshToken: body?.refreshToken || undefined,
+    user: buildUserFromAuth(body),
+    profile: buildProfileFromAuth(body),
+  };
+}
+
+export async function updateWechatProfile(profile: {
+  avatarUrl?: string;
+  nickName?: string;
+}): Promise<{ avatar?: string; nickname?: string }> {
+  const body: AnyMap = await post<AnyMap>('/auth/wechat/profile', {
+    avatarUrl: profile.avatarUrl,
+    nickname: profile.nickName,
+  });
+  return {
+    avatar: body?.avatar || undefined,
+    nickname: body?.nickname || undefined,
+  };
 }
 
 export async function createChildByParent(params: {
@@ -246,20 +313,27 @@ export const getCurrentUser = async (): Promise<{ user: User; profile: TeacherPr
   }, undefined);
 };
 
-export const getSchedules = async (params?: { date?: string }): Promise<Lesson[]> => {
+export const getSchedules = async (params?: { date?: string; startDate?: string; endDate?: string }): Promise<Lesson[]> => {
   return callWithFallback(async () => {
     const q: AnyMap = {};
     if (params?.date) q.date = params.date;
+    if (params?.startDate) q.startDate = params.startDate;
+    if (params?.endDate) q.endDate = params.endDate;
     const list: AnyMap[] = await get<any[]>('/business/lessons', q) || [];
     return list.map(toLesson);
   }, undefined);
 };
 
-export const getLessons = async (params: { studentId: string }): Promise<Lesson[]> => {
+export const getPublicTimetable = async (params: { startDate: string; endDate: string }): Promise<Lesson[]> => {
+  const list = await get<AnyMap[]>('/parent/timetable', params) || [];
+  return list.map(toLesson);
+};
+
+export const getLessons = async (params: { studentId: string; startDate?: string; endDate?: string }): Promise<Lesson[]> => {
   return callWithFallback(async () => {
     const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
-    const endDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const startDate = params.startDate || today.toISOString().split('T')[0];
+    const endDate = params.endDate || new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const list: AnyMap[] = await get<any[]>('/parent/schedules', {
       studentId: params.studentId,
       startDate,
@@ -276,7 +350,7 @@ export const getPhysicalTests = async (params: { studentId: string }): Promise<P
   }, undefined);
 };
 
-export const addPhysicalTest = async (params: { studentId: string; scores: any[]; testerId?: string; items?: any[]; batchId?: number | string; testDate?: string }): Promise<PhysicalTestRecord> => {
+export const addPhysicalTest = async (params: { studentId: string; scores: any[]; testerId?: string; items?: any[]; batchId: number | string; testDate?: string }): Promise<PhysicalTestRecord> => {
   return callWithFallback(async () => {
     const normalizedScores: AnyMap[] = (params.scores || []).map((s: any) => {
       const out: AnyMap = {
@@ -292,7 +366,7 @@ export const addPhysicalTest = async (params: { studentId: string; scores: any[]
       return out;
     }).filter((s: any) => s.itemId != null && s.itemId !== '' && !Number.isNaN(Number(s.itemId)));
     const payload: AnyMap = {
-      batchId: params.batchId != null ? (Number(params.batchId) || 1) : 1,
+      batchId: Number(params.batchId) || params.batchId,
       studentId: Number(params.studentId) || params.studentId,
       testDate: params.testDate || new Date().toISOString().slice(0, 10),
       scores: normalizedScores,
@@ -317,37 +391,6 @@ export const getHourTransactions = async (params: { studentId: string }): Promis
   }, undefined);
 };
 
-export const createCourse = async (params: { lessonDate: string; startTime: string; endTime: string; courseName: string; studentIds: string[]; courseId?: string | number; teacherId?: string | number; repeatType?: string; weekdays?: string[]; consumeHours?: number | string; seriesName?: string }): Promise<any> => {
-  return callWithFallback(async () => {
-    let resolvedCourseId = params.courseId != null ? (Number(params.courseId) || params.courseId) : undefined;
-    if (resolvedCourseId == null) {
-      try {
-        const listData: any = await get<any>('/business/courses', { pageNum: 1, pageSize: 10 });
-        const firstCourse = (Array.isArray(listData) ? listData[0] : listData?.list?.[0]) || null;
-        if (firstCourse?.id) resolvedCourseId = firstCourse.id;
-      } catch (_) { /* fallback: 留空，交给后端参数校验报错明确提示 */ }
-    }
-    const recurrenceType = (params.repeatType || 'NONE').toString().toUpperCase() === 'WEEKLY' ? 'WEEKLY' : 'NONE';
-    const startDate = params.lessonDate || new Date().toISOString().slice(0, 10);
-    const consumeHours = params.consumeHours != null
-      ? (typeof params.consumeHours === 'number' ? params.consumeHours : Number(params.consumeHours))
-      : 1.0;
-    const payload: AnyMap = {
-      ...(resolvedCourseId != null ? { courseId: resolvedCourseId } : {}),
-      ...(params.teacherId != null ? { teacherId: Number(params.teacherId) || params.teacherId } : {}),
-      recurrenceType,
-      startDate,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      consumeHours,
-      ...(params.seriesName ? { seriesName: params.seriesName } : {}),
-      ...(recurrenceType === 'WEEKLY' && Array.isArray(params.weekdays) && params.weekdays.length > 0 ? { weekdays: params.weekdays } : {}),
-    };
-    const data: AnyMap = await post<AnyMap>('/business/schedules', payload);
-    return data;
-  }, undefined);
-};
-
 export const signIn = async (params: { lessonId: string; studentIds: string[]; status?: string }): Promise<{ success: boolean }> => {
   return callWithFallback(async () => {
     const attendanceStatus = (params.status || 'PRESENT').toUpperCase();
@@ -361,6 +404,19 @@ export const signIn = async (params: { lessonId: string; studentIds: string[]; s
         remark: '',
       });
     }
+    return { success: true };
+  }, undefined);
+};
+
+export const parentSignIn = async (params: { lessonId: string; studentId: string; status?: string }): Promise<{ success: boolean }> => {
+  return callWithFallback(async () => {
+    const lessonId = Number(params.lessonId) || params.lessonId;
+    await post(`/parent/lessons/${lessonId}/attendance`, {
+      lessonId,
+      studentId: Number(params.studentId) || params.studentId,
+      attendanceStatus: (params.status || 'PRESENT').toUpperCase(),
+      remark: '',
+    });
     return { success: true };
   }, undefined);
 };
@@ -386,7 +442,9 @@ export const getLessonAttendance = async (params: { lessonId: string }): Promise
       id: toIdStr(d.id ?? d.studentId),
       studentId: toIdStr(d.studentId),
       studentName: d.studentName || '',
-      status: d.status || 'UNKNOWN',
+      studentNo: d.studentNo || '',
+      status: d.attendanceStatus || d.status || 'UNKNOWN',
+      signInAt: d.signInAt || undefined,
     }));
   }, undefined);
 };
@@ -399,6 +457,10 @@ export const getStudents = async (): Promise<any[]> => {
 };
 
 export const getParentStudents = async (): Promise<any[]> => getStudents();
+
+export const logoutSession = async (): Promise<void> => {
+  await post('/auth/logout');
+};
 
 export const getTeacherStudents = async (params?: { pageNum?: number; pageSize?: number; keyword?: string }): Promise<{ students: Student[]; total: number }> => {
   return callWithFallback(async () => {
@@ -420,6 +482,18 @@ export const getTeacherPhysicalTests = async (params?: { pageNum?: number; pageS
   }, undefined);
 };
 
+export const getAllTeacherStudents = (keyword?: string, isCurrent?: () => boolean): Promise<Student[]> =>
+  collectPages(async (pageNum) => {
+    const { students, total } = await getTeacherStudents({ pageNum, pageSize: 200, keyword });
+    return { items: students, total };
+  }, isCurrent);
+
+export const getAllTeacherPhysicalTests = (isCurrent?: () => boolean): Promise<PhysicalTestRecord[]> =>
+  collectPages(async (pageNum) => {
+    const { records, total } = await getTeacherPhysicalTests({ pageNum, pageSize: 200 });
+    return { items: records, total };
+  }, isCurrent);
+
 export const getStudentById = async (studentId: string): Promise<Student> => {
   return callWithFallback(async () => {
     const data: AnyMap = await get<AnyMap>(`/business/students/${studentId}`);
@@ -430,6 +504,13 @@ export const getStudentById = async (studentId: string): Promise<Student> => {
 export const getPhysicalTestItems = async (): Promise<any[]> => {
   return callWithFallback(async () => {
     const list: AnyMap[] = await get<any[]>('/business/physical-tests/items') || [];
+    return list;
+  }, undefined);
+};
+
+export const getPhysicalTestBatches = async (): Promise<any[]> => {
+  return callWithFallback(async () => {
+    const list: AnyMap[] = await get<any[]>('/business/physical-tests/batches') || [];
     return list;
   }, undefined);
 };

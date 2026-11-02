@@ -20,7 +20,7 @@ public class AttendanceRequest {
     private Long studentId;
     
     @NotBlank(message = "出勤状态不能为空")
-    @Pattern(regexp = "^(PRESENT|LEAVE|ABSENT|CANCELLED)$", message = "出勤状态必须是PRESENT、LEAVE、ABSENT或CANCELLED")
+    @Pattern(regexp = "^(PRESENT|LATE|LEAVE|ABSENT|CANCELLED)$", message = "出勤状态必须是PRESENT、LATE、LEAVE、ABSENT或CANCELLED")
     private String attendanceStatus;
     
     private String remark;

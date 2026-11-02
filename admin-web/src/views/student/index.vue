@@ -38,6 +38,9 @@
         </el-table-column>
         <el-table-column prop="parentName" label="家长姓名" min-width="90" />
         <el-table-column prop="parentPhone" label="家长电话" width="130" />
+        <el-table-column prop="primaryTeacherName" label="负责教练" min-width="90">
+          <template #default="{ row }">{{ row.primaryTeacherName || '未分配' }}</template>
+        </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="140" />
         <el-table-column label="操作" width="180">
           <template #default="{ row }">
@@ -69,7 +72,9 @@
           <el-input v-model="form.name" placeholder="请输入学员姓名" />
         </el-form-item>
         <el-form-item prop="studentNo" label="学号">
-          <el-input v-model="form.studentNo" placeholder="请输入学员编号" />
+          <el-input v-if="isEdit" v-model="form.studentNo" disabled />
+          <el-input v-else model-value="保存后由系统自动生成" disabled />
+          <div class="student-no-tip">系统按 001、002… 自动补充最小空缺序号</div>
         </el-form-item>
         <el-form-item prop="gender" label="性别">
           <el-select v-model="form.gender" placeholder="请选择性别" style="width: 100%">
@@ -98,6 +103,16 @@
             <el-option label="其他" value="OTHER" />
           </el-select>
         </el-form-item>
+        <el-form-item prop="primaryTeacherId" label="负责教练">
+          <el-select v-model="form.primaryTeacherId" placeholder="请选择负责教练" clearable style="width: 100%">
+            <el-option
+              v-for="teacher in teachers"
+              :key="teacher.profileId"
+              :label="teacher.profileName || teacher.teacherName || teacher.username"
+              :value="teacher.profileId"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item prop="enrollmentDate" label="报名日期">
           <el-date-picker v-model="form.enrollmentDate" type="date" placeholder="请选择报名日期" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
@@ -116,9 +131,10 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getStudents, createStudent, updateStudent, deleteStudent } from '@/api'
+import { getStudents, createStudent, updateStudent, deleteStudent, getAllUsers } from '@/api'
 
 const tableData = ref([])
+const teachers = ref([])
 const searchForm = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showAddModal = ref(false)
@@ -143,7 +159,6 @@ const form = reactive({
 
 const rules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  studentNo: [{ required: true, message: '请输入学号', trigger: 'blur' }],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }]
 }
 
@@ -161,15 +176,29 @@ const calcAge = (birth) => {
   return Math.max(0, age)
 }
 
+let fetchRequestId = 0
 const fetchData = async () => {
+  const requestId = ++fetchRequestId
   try {
     const res = await getStudents({ ...searchForm, ...pagination })
+    if (requestId !== fetchRequestId) return
     tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
     pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    if (requestId !== fetchRequestId) return
     tableData.value = []
     pagination.total = 0
+  }
+}
+
+const fetchTeachers = async () => {
+  try {
+    const list = await getAllUsers({ role: 'TEACHER' })
+    teachers.value = list.filter(item => item.profileId)
+  } catch (err) {
+    console.error(err)
+    teachers.value = []
   }
 }
 
@@ -230,7 +259,7 @@ const handleSubmit = async () => {
     try {
       const payload = {
         name: form.name,
-        studentNo: form.studentNo,
+        studentNo: isEdit.value ? form.studentNo : null,
         gender: form.gender || 'UNKNOWN',
         birthDate: form.birthDate || null,
         phone: form.phone || null,
@@ -258,11 +287,19 @@ const handleSubmit = async () => {
 }
 
 fetchData()
+fetchTeachers()
 </script>
 
 <style scoped>
 .page-container {
   padding: 0;
+}
+
+.student-no-tip {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .page-header {

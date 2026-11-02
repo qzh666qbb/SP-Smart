@@ -77,6 +77,10 @@ public class StudentController {
             @PathVariable Long id,
             @Valid @RequestBody StudentCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
+        if ("TEACHER".equals(currentUser.getRole())
+                && !teacherPermissionService.canAccessStudent(currentUser, id)) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限修改该学员信息");
+        }
         StudentResponse response = studentApplicationService.updateStudent(id, request, currentUser);
         return ApiResponse.success(response);
     }
@@ -107,14 +111,14 @@ public class StudentController {
     }
 
     @GetMapping("/parent/children")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<List<StudentResponse>> getChildren(@AuthenticationPrincipal CurrentUser currentUser) {
         List<StudentResponse> response = studentApplicationService.getStudentsByParent(currentUser.getProfileId());
         return ApiResponse.success(response);
     }
 
     @GetMapping("/parent/children/{studentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<StudentResponse> getChildById(
             @PathVariable Long studentId,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -123,7 +127,7 @@ public class StudentController {
     }
 
     @PostMapping("/parent/bind-match")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<StudentResponse> matchStudentForBind(
             @Valid @RequestBody ParentBindMatchRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -132,7 +136,7 @@ public class StudentController {
     }
 
     @PostMapping("/parent/bind")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<Void> bind(
             @Valid @RequestBody ParentBindConfirmRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -141,7 +145,7 @@ public class StudentController {
     }
 
     @PostMapping("/parent/bind-student")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<Void> bindStudentByNo(
             @Valid @RequestBody ParentBindConfirmRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -149,7 +153,7 @@ public class StudentController {
     }
 
     @PostMapping("/parent/bind/{relationId}/confirm")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<Void> confirmBind(
             @PathVariable Long relationId,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -158,7 +162,7 @@ public class StudentController {
     }
 
     @PostMapping("/parent/unbind/{studentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    @PreAuthorize("hasRole('PARENT')")
     public ApiResponse<Void> unbindStudent(
             @PathVariable Long studentId,
             @AuthenticationPrincipal CurrentUser currentUser) {

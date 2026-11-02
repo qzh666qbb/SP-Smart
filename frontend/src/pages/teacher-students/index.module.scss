@@ -1,0 +1,51 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $page-padding;
+  background: $color-bg-page;
+  box-sizing: border-box;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
+}
+
+.searchInput {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 $spacing-md;
+  border: 1rpx solid $color-divider;
+  border-radius: $radius-md;
+  background: $color-bg-card;
+}
+
+.searchButton {
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+  padding: $spacing-sm;
+}
+
+.count {
+  display: block;
+  margin-bottom: $spacing-md;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+}
+
+.studentCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+}
+
+.studentMain { min-width: 0; }
+.name { display: block; color: $color-text-primary; font-weight: $font-weight-semibold; }
+.no { display: block; margin-top: $spacing-xs; color: $color-text-tertiary; font-size: $font-size-sm; }
+.studentMeta { display: flex; align-items: center; gap: $spacing-sm; }
+.arrow { color: $color-text-tertiary; font-size: 40rpx; }
+.empty { text-align: center; color: $color-text-tertiary; }

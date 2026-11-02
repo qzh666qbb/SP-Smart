@@ -12,10 +12,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserCreateRequest {
     
-    @NotBlank(message = "用户名不能为空")
+    @Size(max = 64, message = "用户名不能超过64个字符")
     private String username;
     
-    @NotBlank(message = "密码不能为空")
     @Size(min = 6, message = "密码至少6位")
     private String password;
     
@@ -29,6 +28,9 @@ public class UserCreateRequest {
     @Pattern(regexp = "^(ENABLED|DISABLED)$", message = "状态必须是ENABLED或DISABLED")
     private String status;
 
+    @Size(max = 64, message = "教师姓名不能超过64个字符")
+    private String teacherName;
+
     private static String trimToNull(String s) {
         if (s == null) return null;
         String t = s.trim();
@@ -38,11 +40,13 @@ public class UserCreateRequest {
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = trimToNull(username); }
     public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password == null ? null : password; }
+    public void setPassword(String password) { this.password = password == null || password.isBlank() ? null : password; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = trimToNull(role); }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = trimToNull(phone); }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = trimToNull(status) == null ? "ENABLED" : trimToNull(status); }
+    public String getTeacherName() { return teacherName; }
+    public void setTeacherName(String teacherName) { this.teacherName = trimToNull(teacherName); }
 }

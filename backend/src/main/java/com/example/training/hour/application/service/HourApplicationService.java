@@ -56,6 +56,16 @@ public class HourApplicationService {
 
     @Transactional
     public StudentHourAccount recharge(HourRechargeRequest request, CurrentUser currentUser, LocalDate expireDate) {
+        return addHours(request, currentUser, expireDate, "RECHARGE");
+    }
+
+    @Transactional
+    public StudentHourAccount adjust(HourRechargeRequest request, CurrentUser currentUser) {
+        return addHours(request, currentUser, null, "ADJUST");
+    }
+
+    private StudentHourAccount addHours(HourRechargeRequest request, CurrentUser currentUser,
+                                        LocalDate expireDate, String transactionType) {
         StudentHourAccount account = hourRepository.findAccountByStudentId(request.getStudentId())
                 .orElseGet(() -> {
                     StudentHourAccount newAccount = StudentHourAccount.builder()
@@ -108,13 +118,15 @@ public class HourApplicationService {
         StudentHourAccount savedAccount = hourRepository.saveAccount(account);
 
         HourTransaction transaction = HourTransaction.builder()
-                .transactionNo("TR" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .transactionNo(("ADJUST".equals(transactionType) ? "TA" : "TR")
+                        + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .studentId(request.getStudentId())
-                .transactionType("RECHARGE")
+                .transactionType(transactionType)
                 .changeAmount(amount)
                 .beforeBalance(beforeBalance)
                 .afterBalance(afterBalance)
-                .reason(request.getReason() != null ? request.getReason() : "课时充值")
+                .reason(request.getReason() != null ? request.getReason()
+                        : "ADJUST".equals(transactionType) ? "管理员手动增加课时" : "课时充值")
                 .operatorId(currentUser.getUserId())
                 .operatorRole(currentUser.getRole())
                 .hourSource(hourSource)
@@ -122,8 +134,8 @@ public class HourApplicationService {
                 .build();
 
         hourRepository.saveTransaction(transaction);
-        log.info("课时充值: studentId={}, amount={}, hourSource={}, expireDate={}",
-                request.getStudentId(), amount, hourSource, finalExpireDate);
+        log.info("课时增加: studentId={}, amount={}, type={}, hourSource={}, expireDate={}",
+                request.getStudentId(), amount, transactionType, hourSource, finalExpireDate);
 
         return savedAccount;
     }
@@ -190,6 +202,7 @@ public class HourApplicationService {
         }
         
         String primarySource = sourcesUsed.isEmpty() ? "PAID" : sourcesUsed.get(0);
+        String sourceBreakdown = encodeSourceBreakdown(sourcesUsed, amountsUsed);
         HourTransaction transaction = HourTransaction.builder()
                 .transactionNo("TC" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .studentId(studentId)
@@ -203,6 +216,7 @@ public class HourApplicationService {
                 .operatorId(currentUser.getUserId())
                 .operatorRole(currentUser.getRole())
                 .hourSource(primarySource)
+                .sourceBreakdown(sourceBreakdown)
                 .build();
         
         HourTransaction savedTransaction = hourRepository.saveTransaction(transaction);
@@ -217,14 +231,15 @@ public class HourApplicationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND, "学员没有课时账户"));
         
         BigDecimal beforeBalance = safe(account.getRemainingHours());
+        BigDecimal paidHours = safe(account.getPaidHours());
         BigDecimal afterBalance = beforeBalance.subtract(request.getAmount());
         
-        if (!allowNegativeBalance && afterBalance.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException(ErrorCode.HOUR_NEGATIVE_NOT_ALLOWED, "不允许负余额");
+        if (!allowNegativeBalance && paidHours.compareTo(request.getAmount()) < 0) {
+            throw new BusinessException(ErrorCode.HOUR_NEGATIVE_NOT_ALLOWED, "可减少的付费课时不足");
         }
         
         account.setTotalRefunded(safe(account.getTotalRefunded()).add(request.getAmount()));
-        account.setPaidHours(safe(account.getPaidHours()).subtract(request.getAmount()));
+        account.setPaidHours(paidHours.subtract(request.getAmount()));
         account.setRemainingHours(calcRemaining(account));
         
         afterBalance = safe(account.getRemainingHours());
@@ -308,12 +323,7 @@ public class HourApplicationService {
         BigDecimal beforeBalance = safe(account.getRemainingHours());
         
         String source = originalTransaction.getHourSource() != null ? originalTransaction.getHourSource() : "PAID";
-        switch (source) {
-            case "EXPERIENCE" -> account.setExperienceHours(safe(account.getExperienceHours()).add(refundAmount));
-            case "ACTIVITY" -> account.setActivityHours(safe(account.getActivityHours()).add(refundAmount));
-            case "GIFT" -> account.setGiftHours(safe(account.getGiftHours()).add(refundAmount));
-            case "PAID" -> account.setPaidHours(safe(account.getPaidHours()).add(refundAmount));
-        }
+        restoreConsumedSources(account, originalTransaction, refundAmount, source);
 
         account.setTotalRefunded(safe(account.getTotalRefunded()).add(refundAmount));
         account.setRemainingHours(calcRemaining(account));
@@ -341,6 +351,7 @@ public class HourApplicationService {
                 .operatorId(currentUser.getUserId())
                 .operatorRole(currentUser.getRole())
                 .hourSource(source)
+                .sourceBreakdown(originalTransaction.getSourceBreakdown())
                 .build();
 
         HourTransaction savedRefundTransaction = hourRepository.saveTransaction(refundTransaction);
@@ -352,5 +363,59 @@ public class HourApplicationService {
                 originalTransaction.getStudentId(), refundAmount, source);
 
         return hourRepository.findAccountByStudentId(originalTransaction.getStudentId()).orElse(null);
+    }
+
+    private String encodeSourceBreakdown(List<String> sources, List<BigDecimal> amounts) {
+        if (sources.isEmpty()) {
+            return null;
+        }
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < sources.size(); i++) {
+            if (i > 0) {
+                result.append(';');
+            }
+            result.append(sources.get(i)).append('=').append(amounts.get(i).toPlainString());
+        }
+        return result.toString();
+    }
+
+    private void restoreConsumedSources(StudentHourAccount account, HourTransaction transaction,
+                                        BigDecimal refundAmount, String defaultSource) {
+        String breakdown = transaction.getSourceBreakdown();
+        if (breakdown == null || breakdown.isBlank()) {
+            addToSource(account, defaultSource, refundAmount);
+            return;
+        }
+
+        BigDecimal restored = BigDecimal.ZERO;
+        try {
+            for (String part : breakdown.split(";")) {
+                String[] values = part.split("=", 2);
+                if (values.length != 2) {
+                    throw new IllegalArgumentException("invalid source breakdown");
+                }
+                BigDecimal amount = new BigDecimal(values[1]);
+                if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new IllegalArgumentException("negative source amount");
+                }
+                addToSource(account, values[0], amount);
+                restored = restored.add(amount);
+            }
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.HOUR_TRANSACTION_FAILED, "原消耗流水的课时来源明细无效");
+        }
+        if (restored.compareTo(refundAmount) != 0) {
+            throw new BusinessException(ErrorCode.HOUR_TRANSACTION_FAILED, "原消耗流水的课时来源明细不完整");
+        }
+    }
+
+    private void addToSource(StudentHourAccount account, String source, BigDecimal amount) {
+        switch (source) {
+            case "EXPERIENCE" -> account.setExperienceHours(safe(account.getExperienceHours()).add(amount));
+            case "ACTIVITY" -> account.setActivityHours(safe(account.getActivityHours()).add(amount));
+            case "GIFT" -> account.setGiftHours(safe(account.getGiftHours()).add(amount));
+            case "PAID" -> account.setPaidHours(safe(account.getPaidHours()).add(amount));
+            default -> throw new IllegalArgumentException("unknown hour source");
+        }
     }
 }

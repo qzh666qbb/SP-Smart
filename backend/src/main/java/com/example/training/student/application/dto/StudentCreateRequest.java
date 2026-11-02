@@ -14,7 +14,6 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class StudentCreateRequest {
     
-    @NotBlank(message = "学员编号不能为空")
     private String studentNo;
     
     @NotBlank(message = "学员姓名不能为空")

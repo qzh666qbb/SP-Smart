@@ -1,10 +1,13 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { apiErrorMessage } from '@/utils/apiError'
 
 const service = axios.create({
   baseURL: '/api',
   timeout: 15000
 })
+
+const ENABLE_MOCK_FALLBACK = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true'
 
 let _authRedirectInProgress = false
 const cleanseStaleMockToken = () => {
@@ -58,7 +61,7 @@ service.interceptors.response.use(
         ? response.data
         : { code: -1, message: '服务器返回为空', data: null }
     const code = res?.code ?? -1
-    const message = res?.message || 'Error'
+    const message = apiErrorMessage(res)
     const body = res?.data ?? res
     if (code === 0 || code === 200) {
       return body
@@ -74,7 +77,8 @@ service.interceptors.response.use(
     const status = error?.response?.status
     const data = error?.response?.data || {}
     const code = typeof data === 'object' ? data?.code : null
-    const msg = data?.message || error?.message || '网络错误，请检查后端服务是否启动'
+    const msg = apiErrorMessage(data, error?.message || '网络错误，请稍后重试')
+    error.message = msg
     console.warn('[API] Request failed:', status, code, msg)
     if (status === 401 || code === 20003 || code === 20001 || code === 20002) {
       triggerAuthRedirect(code === 20003 ? (data?.message || '请先登录') : '登录已过期，请重新登录')
@@ -211,7 +215,7 @@ const callWithMock = async (apiFn, mockFn, params, config = {}) => {
     const url = normalizeUrl(config.url || (apiFn && apiFn.toString ? apiFn.toString() : ''))
     const method = config.method || 'GET'
 
-    const canFallbackMock = isReadOnlyApi(url, method)
+    const canFallbackMock = ENABLE_MOCK_FALLBACK && isReadOnlyApi(url, method)
     if (!canFallbackMock) {
       ElMessage.error(`操作失败: ${err?.message || err}`)
       return Promise.reject(err)
@@ -247,6 +251,30 @@ const readTotal = (maybePageResult, fallbackLen = 0) => {
 }
 
 export { readList, readTotal }
+
+const mapPage = (value, mapper) => {
+  if (Array.isArray(value)) return value.map(mapper)
+  if (!value || typeof value !== 'object') return value
+  const key = ['list', 'records', 'rows'].find(k => Array.isArray(value[k]))
+  return key ? { ...value, [key]: value[key].map(mapper) } : value
+}
+
+const collectAllPages = async (fetchPage, params = {}, pageSize = 500) => {
+  const items = []
+  let pageNum = 1
+  let total = Number.POSITIVE_INFINITY
+  while (items.length < total) {
+    const page = await fetchPage({ ...params, pageNum, pageSize })
+    const rows = readList(page)
+    total = readTotal(page, items.length + rows.length)
+    items.push(...rows)
+    if (rows.length === 0 || items.length >= total) break
+    pageNum += 1
+  }
+  return items
+}
+
+const withCreatedAt = (row = {}) => ({ ...row, createTime: row.createTime || row.createdAt })
 
 const callWriteApi = async (apiFn, successMsg = '操作成功') => {
   try {
@@ -319,37 +347,48 @@ export const normalizeQueryParams = (params = {}) => {
 
 export const getCurrentUser = () => callWithMock(() => service.get('/auth/me'), mockGetCurrentUser)
 
-export const getUsers = (params) => {
+export const getUsers = async (params) => {
   const p = normalizeQueryParams(params)
-  return callWithMock(() => service.get('/admin/users', { params: p }), mockGetUsers, p, { url: '/admin/users', method: 'GET' })
+  const data = await callWithMock(() => service.get('/admin/users', { params: p }), mockGetUsers, p, { url: '/admin/users', method: 'GET' })
+  return mapPage(data, withCreatedAt)
 }
+export const getAllUsers = (params) => collectAllPages(getUsers, params)
 
 export const createUser = (params) => callWriteApi(() => service.post('/admin/users', params), '创建用户成功')
 export const updateUser = (id, params) => callWriteApi(() => service.put(`/admin/users/${id}`, params), '更新用户成功')
 export const deleteUser = (id) => callWriteApi(() => service.delete(`/admin/users/${id}`), '删除用户成功')
 export const resetUserPassword = (id, data) => callWriteApi(() => service.post(`/admin/users/${id}/reset-password`, data), '密码重置成功！新密码已生效')
 
-export const getStudents = (params) => {
+export const getStudents = async (params) => {
   const p = normalizeQueryParams(params)
-  return callWithMock(() => service.get('/business/students', { params: p }), mockGetStudents, p, { url: '/business/students', method: 'GET' })
+  const data = await callWithMock(() => service.get('/business/students', { params: p }), mockGetStudents, p, { url: '/business/students', method: 'GET' })
+  return mapPage(data, withCreatedAt)
 }
+export const getAllStudents = (params) => collectAllPages(getStudents, params)
 
 export const createStudent = (params) => callWriteApi(() => service.post('/business/students', params), '创建学员成功')
 export const updateStudent = (id, params) => callWriteApi(() => service.put(`/business/students/${id}`, params), '更新学员成功')
 export const deleteStudent = (id) => callWriteApi(() => service.delete(`/business/students/${id}`), '删除学员成功')
 
-export const getCourses = (params) => {
+export const getCourses = async (params) => {
   const p = normalizeQueryParams(params)
-  return callWithMock(() => service.get('/business/courses', { params: p }), mockGetCourses, p, { url: '/business/courses', method: 'GET' })
+  const data = await callWithMock(() => service.get('/business/courses', { params: p }), mockGetCourses, p, { url: '/business/courses', method: 'GET' })
+  return mapPage(data, withCreatedAt)
 }
+export const getAllCourses = (params) => collectAllPages(getCourses, params)
 
 export const createCourse = (params) => callWriteApi(() => service.post('/business/courses', params), '创建课程成功')
 export const updateCourse = (id, params) => callWriteApi(() => service.put(`/business/courses/${id}`, params), '更新课程成功')
 export const deleteCourse = (id) => callWriteApi(() => service.delete(`/business/courses/${id}`), '删除课程成功')
 
-export const getSchedules = (params) => {
+export const getSchedules = async (params) => {
   const p = normalizeQueryParams(params)
-  return callWithMock(() => service.get('/business/schedules', { params: p }), mockGetSchedules, p, { url: '/business/schedules', method: 'GET' })
+  const data = await callWithMock(() => service.get('/business/schedules', { params: p }), mockGetSchedules, p, { url: '/business/schedules', method: 'GET' })
+  return mapPage(data, row => ({
+    ...row,
+    scheduleName: row.scheduleName || row.seriesName,
+    scheduleType: row.scheduleType || (row.recurrenceType === 'NONE' ? 'SINGLE' : 'RECURRING')
+  }))
 }
 
 export const createSchedule = (params) => callWriteApi(() => service.post('/business/schedules', params), '创建排课成功')
@@ -367,11 +406,15 @@ export const cancelLesson = (id, reason) => callWriteApi(() => service.post(`/bu
 
 export const recordAttendance = (params) => callWriteApi(() => service.post('/business/attendance', params), '考勤记录成功')
 
-export const getPhysicalTests = (params) => {
+export const getPhysicalTests = async (params) => {
   const p = normalizeQueryParams(params)
-  return callWithMock(() => service.get('/business/physical-tests', { params: p }), mockGetPhysicalTests, p, { url: '/business/physical-tests', method: 'GET' })
+  const data = await callWithMock(() => service.get('/business/physical-tests', { params: p }), mockGetPhysicalTests, p, { url: '/business/physical-tests', method: 'GET' })
+  return mapPage(data, withCreatedAt)
 }
 export const getPhysicalItems = () => callWithMock(() => service.get('/business/physical-tests/items'), Promise.resolve([]), {}, { url: '/business/physical-tests/items', method: 'GET' })
+export const getPhysicalBatches = () => service.get('/business/physical-tests/batches')
+export const createPhysicalBatch = (params) => callWriteApi(() => service.post('/business/physical-tests/batches', params), '创建体测批次成功')
+export const getPhysicalReport = (studentId) => service.get('/admin/reports/physical', { params: { studentId } })
 
 export const createPhysicalTest = (params) => callWriteApi(() => service.post('/business/physical-tests', params), '创建体测记录成功')
 export const updatePhysicalTest = (id, params) => callWriteApi(() => service.put(`/business/physical-tests/${id}`, params), '更新体测记录成功')
@@ -385,11 +428,21 @@ export const getHourAccounts = (params) => {
 export const getHourAccount = (studentId) => callWithMock(() => service.get(`/business/hours/accounts/${studentId}`), Promise.resolve({}), {}, { url: `/business/hours/accounts/${studentId}`, method: 'GET' })
 
 export const rechargeHours = (params) => callWriteApi(() => service.post('/business/hours/recharge', params), '充值成功')
-export const refundHours = (params) => callWriteApi(() => service.post('/business/hours/refund', params), '退款成功')
+export const adjustHours = (params) => callWriteApi(() => service.post('/business/hours/adjust', params), '课时添加成功')
+export const refundHours = (params) => callWriteApi(() => service.post('/business/hours/refund', params), '课时减少成功')
 
-export const getHourTransactions = (studentId, params = {}) => {
+export const getHourConsumeStats = (params) => service.get('/admin/hour-stats/consume-stats', { params })
+
+export const getHourTransactions = async (studentId, params = {}) => {
   const p = normalizeQueryParams(params)
-  return callWithMock(() => service.get(`/business/hours/transactions/${studentId}`, { params: p }), mockGetHourTransactions, p, { url: `/business/hours/transactions/${studentId}`, method: 'GET' })
+  const data = await callWithMock(() => service.get(`/business/hours/transactions/${studentId}`, { params: p }), mockGetHourTransactions, p, { url: `/business/hours/transactions/${studentId}`, method: 'GET' })
+  return mapPage(data, row => ({
+    ...row,
+    hours: row.hours ?? Math.abs(Number(row.changeAmount || 0)),
+    balance: row.balance ?? row.afterBalance,
+    remark: row.remark || row.reason,
+    createTime: row.createTime || row.createdAt
+  }))
 }
 
 export default service

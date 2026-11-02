@@ -8,14 +8,14 @@ export default function mockGetCurrentUser(): { user: User; profile: TeacherProf
     username: 'teacher001',
     role: 'TEACHER',
     phone: '13800138000',
-    avatar: 'https://picsum.photos/id/64/200/200'
+    avatar: undefined
   };
   
   const profile: TeacherProfile = {
     id: '1',
     userId: '1',
     name: '张老师',
-    avatar: 'https://picsum.photos/id/64/200/200',
+    avatar: undefined,
     school: '阳光体育学校',
     title: '高级教练'
   };

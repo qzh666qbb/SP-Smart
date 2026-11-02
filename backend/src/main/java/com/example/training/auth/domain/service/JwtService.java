@@ -37,6 +37,7 @@ public class JwtService {
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put("role", role);
+        claims.put("tokenType", "access");
         if (phone != null) claims.put("phone", phone);
         if (profileId != null) claims.put("profileId", profileId);
         if (profileType != null) claims.put("profileType", profileType);
@@ -67,10 +68,12 @@ public class JwtService {
         return claims.get("profileType", String.class);
     }
     
-    public String generateRefreshToken(Long userId, String username) {
+    public String generateRefreshToken(Long userId, String username, int tokenVersion) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
+        claims.put("tokenType", "refresh");
+        claims.put("tokenVersion", tokenVersion);
         return Jwts.builder()
                 .claims(claims)
                 .subject(username)
@@ -110,6 +113,21 @@ public class JwtService {
     public String extractRole(String token) {
         Claims claims = parseToken(token);
         return claims.get("role", String.class);
+    }
+
+    public boolean isAccessToken(String token) {
+        return "access".equals(parseToken(token).get("tokenType", String.class));
+    }
+
+    public boolean isRefreshToken(String token) {
+        return "refresh".equals(parseToken(token).get("tokenType", String.class));
+    }
+
+    public int extractTokenVersion(String token) {
+        Object value = parseToken(token).get("tokenVersion");
+        if (value == null) return 0;
+        if (value instanceof Number number) return number.intValue();
+        return Integer.parseInt(value.toString());
     }
     
     public LocalDateTime getExpirationTime(String token) {

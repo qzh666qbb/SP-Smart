@@ -3,6 +3,8 @@ package com.example.training.schedule.application.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,6 +13,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 
@@ -26,8 +29,13 @@ public class ScheduleCreateRequest {
     
     private Long classGroupId;
     
-    @NotNull(message = "教师ID不能为空")
     private Long teacherId;
+
+    private Long assistantTeacherId1;
+
+    private Long assistantTeacherId2;
+
+    private List<Long> studentIds;
     
     @NotBlank(message = "重复类型不能为空")
     @Pattern(regexp = "^(NONE|WEEKLY)$", message = "重复类型必须是NONE或WEEKLY")
@@ -47,12 +55,38 @@ public class ScheduleCreateRequest {
     private LocalTime endTime;
     
     @NotNull(message = "消耗课时不能为空")
+    @DecimalMin(value = "0.01", message = "消耗课时必须大于0")
     private BigDecimal consumeHours;
+
+    @AssertTrue(message = "结束时间必须晚于开始时间")
+    public boolean isTimeRangeValid() {
+        return startTime == null || endTime == null || endTime.isAfter(startTime);
+    }
+
+    @AssertTrue(message = "结束日期不能早于开始日期")
+    public boolean isDateRangeValid() {
+        return startDate == null || endDate == null || !endDate.isBefore(startDate);
+    }
+
+    @AssertTrue(message = "周循环排课必须选择星期并设置结束日期")
+    public boolean isWeeklyConfigValid() {
+        return !"WEEKLY".equals(recurrenceType)
+                || (endDate != null && getWeekdays() != null && !getWeekdays().isBlank());
+    }
+
+    @AssertTrue(message = "循环排课时间范围不能超过366天")
+    public boolean isRangeLengthValid() {
+        return startDate == null || endDate == null
+                || ChronoUnit.DAYS.between(startDate, endDate) <= 366;
+    }
 
     public String getSeriesName() { return seriesName; }    public void setSeriesName(String seriesName) { this.seriesName = seriesName; }
     public Long getCourseId() { return courseId; }    public void setCourseId(Long courseId) { this.courseId = courseId; }
     public Long getClassGroupId() { return classGroupId; }    public void setClassGroupId(Long classGroupId) { this.classGroupId = classGroupId; }
     public Long getTeacherId() { return teacherId; }    public void setTeacherId(Long teacherId) { this.teacherId = teacherId; }
+    public Long getAssistantTeacherId1() { return assistantTeacherId1; }    public void setAssistantTeacherId1(Long assistantTeacherId1) { this.assistantTeacherId1 = assistantTeacherId1; }
+    public Long getAssistantTeacherId2() { return assistantTeacherId2; }    public void setAssistantTeacherId2(Long assistantTeacherId2) { this.assistantTeacherId2 = assistantTeacherId2; }
+    public List<Long> getStudentIds() { return studentIds; }    public void setStudentIds(List<Long> studentIds) { this.studentIds = studentIds; }
     public String getRecurrenceType() { return recurrenceType; }    public void setRecurrenceType(String recurrenceType) { this.recurrenceType = recurrenceType; }
 
     public String getWeekdays() {

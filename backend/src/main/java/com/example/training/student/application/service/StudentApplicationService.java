@@ -26,10 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -42,27 +42,25 @@ public class StudentApplicationService {
     private final UserRepository userRepository;
     private final HourRepository hourRepository;
 
-    @Value("${app.student.auto-generate-no-prefix:S}")
-    private String studentNoPrefix;
-
     @Value("${app.student.max-children-per-parent:6}")
     private int maxChildrenPerParent;
-
-    private final Random random = new Random();
 
     @Transactional
     public StudentResponse createChildByParent(CurrentUser currentUser, ChildCreateRequest req) {
         ParentProfile parentProfile = userRepository.findParentProfileByUserId(currentUser.getUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "家长资料不存在，请先完善家长信息"));
 
-        Long parentId = parentProfile.getId() != null ? parentProfile.getId() : currentUser.getUserId();
+        if (parentProfile.getId() == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND, "家长资料异常，请重新完善家长信息");
+        }
+        Long parentId = parentProfile.getId();
 
         List<Student> existingChildren = studentRepository.findByParentId(parentId);
         if (existingChildren.size() >= maxChildrenPerParent) {
             throw new BusinessException(ErrorCode.CHILD_MAX_LIMIT);
         }
 
-        String studentNo = generateStudentNo(studentNoPrefix);
+        String studentNo = generateStudentNo();
 
         Student student = Student.builder()
                 .studentNo(studentNo)
@@ -95,22 +93,7 @@ public class StudentApplicationService {
                 .build();
         studentRepository.saveRelation(relation);
 
-        hourRepository.findAccountByStudentId(savedStudent.getId())
-                .orElseGet(() -> {
-                    StudentHourAccount newAccount = StudentHourAccount.builder()
-                            .studentId(savedStudent.getId())
-                            .totalRecharged(BigDecimal.ZERO)
-                            .totalConsumed(BigDecimal.ZERO)
-                            .totalRefunded(BigDecimal.ZERO)
-                            .remainingHours(BigDecimal.ZERO)
-                            .paidHours(BigDecimal.ZERO)
-                            .giftHours(BigDecimal.ZERO)
-                            .experienceHours(BigDecimal.ZERO)
-                            .activityHours(BigDecimal.ZERO)
-                            .version(0)
-                            .build();
-                    return hourRepository.saveAccount(newAccount);
-                });
+        ensureHourAccount(savedStudent.getId());
 
         log.info("家长自建孩子成功: parentId={}, studentId={}, studentNo={}",
                 parentId, savedStudent.getId(), savedStudent.getStudentNo());
@@ -118,37 +101,22 @@ public class StudentApplicationService {
         return convertToResponse(savedStudent);
     }
 
-    private String generateStudentNo(String prefix) {
-        String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        int maxRetry = 3;
-        for (int attempt = 0; attempt < maxRetry; attempt++) {
-            int seq = countTodayCreatedStudents() + 1 + attempt;
-            String seqPart = String.format("%04d", seq);
-            String candidate = prefix + datePart + seqPart;
-            if (attempt > 0) {
-                candidate = candidate + random.nextInt(10);
-            }
-            if (studentRepository.findByStudentNo(candidate).isEmpty()) {
-                return candidate;
-            }
-        }
-        String fallback = prefix + datePart + System.currentTimeMillis() % 10000;
-        while (studentRepository.findByStudentNo(fallback).isPresent()) {
-            fallback = prefix + datePart + (System.currentTimeMillis() % 10000) + random.nextInt(10);
-        }
-        return fallback;
-    }
-
-    private int countTodayCreatedStudents() {
-        List<Student> all = studentRepository.findAll();
-        LocalDate today = LocalDate.now();
-        int count = 0;
-        for (Student s : all) {
-            if (s.getCreatedAt() != null && s.getCreatedAt().toLocalDate().equals(today)) {
-                count++;
+    private String generateStudentNo() {
+        Set<Integer> usedNumbers = new HashSet<>();
+        for (Student student : studentRepository.findAll()) {
+            String no = student.getStudentNo();
+            if (no != null && no.matches("\\d+")) {
+                try {
+                    int value = Integer.parseInt(no);
+                    if (value > 0) usedNumbers.add(value);
+                } catch (NumberFormatException ignore) {
+                    // 超出整数范围的旧学号不参与顺序号生成。
+                }
             }
         }
-        return count;
+        int next = 1;
+        while (usedNumbers.contains(next)) next++;
+        return String.format("%03d", next);
     }
 
     private String normalizeRelation(String raw) {
@@ -167,13 +135,12 @@ public class StudentApplicationService {
 
     @Transactional
     public StudentResponse createStudent(StudentCreateRequest request, CurrentUser currentUser) {
-        studentRepository.findByStudentNo(request.getStudentNo())
-                .ifPresent(s -> {
-                    throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "学员编号已存在");
-                });
+        String studentNo = generateStudentNo();
+        Long primaryTeacherId = currentUser.isTeacher() ? currentUser.getProfileId() : request.getPrimaryTeacherId();
+        validateTeacherProfile(primaryTeacherId);
 
         Student student = Student.builder()
-                .studentNo(request.getStudentNo())
+                .studentNo(studentNo)
                 .name(request.getName())
                 .gender(request.getGender())
                 .birthDate(request.getBirthDate())
@@ -181,7 +148,7 @@ public class StudentApplicationService {
                 .parentName(request.getParentName())
                 .parentPhone(request.getParentPhone())
                 .parentRelation(request.getParentRelation())
-                .primaryTeacherId(request.getPrimaryTeacherId())
+                .primaryTeacherId(primaryTeacherId)
                 .enrollmentDate(request.getEnrollmentDate())
                 .status("ACTIVE")
                 .medicalNotes(request.getMedicalNotes())
@@ -190,7 +157,28 @@ public class StudentApplicationService {
                 .build();
 
         Student savedStudent = studentRepository.save(student);
+        ensureHourAccount(savedStudent.getId());
         return convertToResponse(savedStudent);
+    }
+
+    /**
+     * Every student owns an hour account from creation. Initial hours stay at zero;
+     * administrators add hours later through the recharge flow so a transaction is recorded.
+     */
+    private StudentHourAccount ensureHourAccount(Long studentId) {
+        return hourRepository.findAccountByStudentId(studentId)
+                .orElseGet(() -> hourRepository.saveAccount(StudentHourAccount.builder()
+                        .studentId(studentId)
+                        .totalRecharged(BigDecimal.ZERO)
+                        .totalConsumed(BigDecimal.ZERO)
+                        .totalRefunded(BigDecimal.ZERO)
+                        .remainingHours(BigDecimal.ZERO)
+                        .paidHours(BigDecimal.ZERO)
+                        .giftHours(BigDecimal.ZERO)
+                        .experienceHours(BigDecimal.ZERO)
+                        .activityHours(BigDecimal.ZERO)
+                        .version(0)
+                        .build()));
     }
 
     public StudentResponse getStudentById(Long id) {
@@ -211,7 +199,10 @@ public class StudentApplicationService {
         if (request.getParentName() != null) existing.setParentName(request.getParentName());
         if (request.getParentPhone() != null) existing.setParentPhone(request.getParentPhone());
         if (request.getParentRelation() != null) existing.setParentRelation(request.getParentRelation());
-        if (request.getPrimaryTeacherId() != null) existing.setPrimaryTeacherId(request.getPrimaryTeacherId());
+        if (currentUser.isAdmin()) {
+            validateTeacherProfile(request.getPrimaryTeacherId());
+            existing.setPrimaryTeacherId(request.getPrimaryTeacherId());
+        }
         if (request.getEnrollmentDate() != null) existing.setEnrollmentDate(request.getEnrollmentDate());
         if (request.getMedicalNotes() != null) existing.setMedicalNotes(request.getMedicalNotes());
         if (request.getRemark() != null) existing.setRemark(request.getRemark());
@@ -221,11 +212,19 @@ public class StudentApplicationService {
         return convertToResponse(saved);
     }
 
+    private void validateTeacherProfile(Long teacherProfileId) {
+        if (teacherProfileId != null && userRepository.findTeacherProfileById(teacherProfileId).isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "负责教练不存在或未建立教师档案");
+        }
+    }
+
     public List<StudentResponse> getAllStudents() {
         return getAllStudentsPage(null, null, 1, Integer.MAX_VALUE).getList();
     }
 
     public PageResult<StudentResponse> getAllStudentsPage(String keyword, Long teacherId, int pageNum, int pageSize) {
+        int pn = Math.max(1, pageNum);
+        int ps = Math.min(500, Math.max(1, pageSize));
         List<Student> all = teacherId != null
                 ? studentRepository.findByTeacherId(teacherId)
                 : studentRepository.findAll();
@@ -240,10 +239,10 @@ public class StudentApplicationService {
                         || contains(s.getGender(), kw))
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
-        int from = Math.max(0, (pageNum - 1) * pageSize);
-        int to = Math.min(from + pageSize, filtered.size());
+        int from = Math.max(0, (pn - 1) * ps);
+        int to = Math.min(from + ps, filtered.size());
         List<StudentResponse> page = from >= filtered.size() ? new ArrayList<>() : new ArrayList<>(filtered.subList(from, to));
-        return PageResult.of(page, filtered.size(), pageNum, pageSize);
+        return PageResult.of(page, filtered.size(), pn, ps);
     }
 
     public List<StudentResponse> getStudentsByTeacher(Long teacherId) {
@@ -265,7 +264,8 @@ public class StudentApplicationService {
         Student student = studentRepository.findById(request.getStudentId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
 
-        studentRepository.findRelation(currentUser.getUserId(), request.getStudentId())
+        Long parentId = requireParentProfileId(currentUser);
+        studentRepository.findRelation(parentId, request.getStudentId())
                 .ifPresent(relation -> {
                     if ("PENDING".equals(relation.getBindStatus())) {
                         throw new BusinessException(ErrorCode.STUDENT_BIND_PENDING, "绑定请求已存在");
@@ -273,7 +273,7 @@ public class StudentApplicationService {
                 });
 
         ParentStudentRelation relation = ParentStudentRelation.builder()
-                .parentId(currentUser.getUserId())
+                .parentId(parentId)
                 .studentId(request.getStudentId())
                 .relationType(request.getRelationType())
                 .isPrimary(false)
@@ -282,13 +282,17 @@ public class StudentApplicationService {
                 .build();
 
         studentRepository.saveRelation(relation);
-        log.info("家长绑定学员: parentId={}, studentId={}", currentUser.getUserId(), request.getStudentId());
+        log.info("家长绑定学员: parentId={}, studentId={}", parentId, request.getStudentId());
     }
 
     @Transactional
     public void confirmBind(Long relationId, CurrentUser currentUser) {
-        ParentStudentRelation relation = studentRepository.findRelation(currentUser.getUserId(), relationId)
+        Long parentId = requireParentProfileId(currentUser);
+        ParentStudentRelation relation = studentRepository.findRelationById(relationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "绑定关系不存在"));
+        if (!parentId.equals(relation.getParentId())) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限确认该绑定关系");
+        }
 
         relation.setBindStatus("CONFIRMED");
         relation.setBoundAt(LocalDateTime.now());
@@ -298,21 +302,33 @@ public class StudentApplicationService {
 
     @Transactional
     public void unbindStudent(Long studentId, CurrentUser currentUser) {
-        ParentStudentRelation relation = studentRepository.findRelation(currentUser.getUserId(), studentId)
+        Long parentId = requireParentProfileId(currentUser);
+        ParentStudentRelation relation = studentRepository.findRelation(parentId, studentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "绑定关系不存在"));
 
         relation.setBindStatus("UNBOUND");
         studentRepository.saveRelation(relation);
-        log.info("解除绑定: parentId={}, studentId={}", currentUser.getUserId(), studentId);
+        log.info("解除绑定: parentId={}, studentId={}", parentId, studentId);
     }
 
     @Transactional
     public void deleteStudent(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
-        student.setDeletedAt(java.time.LocalDateTime.now());
+        if (student.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.STUDENT_NOT_FOUND);
+        }
+        student.setStudentNo(buildDeletedStudentNo(student));
+        student.setDeletedAt(LocalDateTime.now());
         studentRepository.save(student);
         log.info("删除学员: id={}, name={}", id, student.getName());
+    }
+
+    private String buildDeletedStudentNo(Student student) {
+        String original = student.getStudentNo() == null ? "" : student.getStudentNo().trim();
+        String prefix = "DEL_" + student.getId() + "_";
+        int maxOriginalLen = Math.max(0, 32 - prefix.length());
+        return prefix + (original.length() > maxOriginalLen ? original.substring(0, maxOriginalLen) : original);
     }
 
     public StudentResponse matchStudentForBind(CurrentUser currentUser, com.example.training.student.application.dto.ParentBindMatchRequest request) {
@@ -359,7 +375,8 @@ public class StudentApplicationService {
             }
         }
 
-        studentRepository.findRelation(currentUser.getUserId(), studentId)
+        Long parentId = requireParentProfileId(currentUser);
+        studentRepository.findRelation(parentId, studentId)
                 .ifPresent(r -> {
                     if ("PENDING".equals(r.getBindStatus()) || "CONFIRMED".equals(r.getBindStatus())) {
                         throw new BusinessException(ErrorCode.STUDENT_BIND_PENDING, "您已经绑定过该学员");
@@ -367,7 +384,7 @@ public class StudentApplicationService {
                 });
 
         ParentStudentRelation relation = ParentStudentRelation.builder()
-                .parentId(currentUser.getUserId())
+                .parentId(parentId)
                 .studentId(studentId)
                 .relationType(relationType)
                 .isPrimary(false)
@@ -376,7 +393,14 @@ public class StudentApplicationService {
                 .createdBy(currentUser.getUserId())
                 .build();
         studentRepository.saveRelation(relation);
-        log.info("家长确认绑定学员成功: parentId={}, studentId={}", currentUser.getUserId(), studentId);
+        log.info("家长确认绑定学员成功: parentId={}, studentId={}", parentId, studentId);
+    }
+
+    private Long requireParentProfileId(CurrentUser currentUser) {
+        if (currentUser == null || currentUser.getProfileId() == null) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "家长资料不存在，请先完善资料");
+        }
+        return currentUser.getProfileId();
     }
 
     public StudentResponse getChildById(Long parentId, Long studentId) {
@@ -391,6 +415,9 @@ public class StudentApplicationService {
     }
 
     private StudentResponse convertToResponse(Student student) {
+        String primaryTeacherName = student.getPrimaryTeacherId() == null ? null
+                : userRepository.findTeacherProfileById(student.getPrimaryTeacherId())
+                        .map(profile -> profile.getName()).orElse(null);
         return StudentResponse.builder()
                 .id(student.getId())
                 .studentNo(student.getStudentNo())
@@ -403,6 +430,7 @@ public class StudentApplicationService {
                 .parentPhone(student.getParentPhone())
                 .parentRelation(student.getParentRelation())
                 .primaryTeacherId(student.getPrimaryTeacherId())
+                .primaryTeacherName(primaryTeacherName)
                 .enrollmentDate(student.getEnrollmentDate())
                 .status(student.getStatus())
                 .medicalNotes(student.getMedicalNotes())

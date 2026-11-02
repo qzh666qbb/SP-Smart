@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Picker, Textarea } from '@tarojs/components';
+import { View, Text, Picker, Textarea } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import CustomButton from '@/components/Button';
@@ -69,7 +69,7 @@ export default function StudentsPage() {
   };
 
   return (
-    <ScrollView className={styles.studentsPage} scrollY>
+    <View className={styles.studentsPage}>
       <View className={styles.container}>
         <View className={styles.header}>
           <Text className={styles.pageTitle}>录入自己孩子信息</Text>
@@ -170,6 +170,6 @@ export default function StudentsPage() {
           </CustomButton>
         </Card>
       </View>
-    </ScrollView>
+    </View>
   );
 }

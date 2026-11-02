@@ -3,35 +3,65 @@ import Taro from '@tarojs/taro';
 import { View, Text, ScrollView } from '@tarojs/components';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
-import { Lesson, Student } from '@/types';
+import { HourTransaction, Lesson, Student, StudentHourAccount } from '@/types';
 import {
   getSchedules,
   getLessonAttendance,
-  getTeacherStudents,
+  getAllTeacherStudents,
+  getHourAccount,
+  getHourTransactions,
 } from '@/services/api';
 import { formatDate } from '@/utils/format';
+import useAuthStore from '@/store/auth';
 import styles from './index.module.scss';
 
 interface AttendanceStudent extends Student {
-  attendanceStatus: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
+  attendanceStatus: 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE';
   signInAt?: string;
 }
 
 export default function CourseTransactionPage() {
+  const { user } = useAuthStore();
+  const routeStudentId = String(Taro.getCurrentInstance()?.router?.params?.studentId || '');
+  const isParentHours = user?.role === 'PARENT' && Boolean(routeStudentId);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceList, setAttendanceList] = useState<AttendanceStudent[]>([]);
+  const [hourAccount, setHourAccount] = useState<StudentHourAccount | null>(null);
+  const [hourTransactions, setHourTransactions] = useState<HourTransaction[]>([]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (isParentHours) fetchParentHours(routeStudentId);
+    else fetchData();
+  }, [isParentHours, routeStudentId]);
+
+  const fetchParentHours = async (studentId: string) => {
+    setIsLoading(true);
+    try {
+      const [account, transactions] = await Promise.all([
+        getHourAccount({ studentId }),
+        getHourTransactions({ studentId }),
+      ]);
+      setHourAccount(account);
+      setHourTransactions(transactions || []);
+    } catch (error) {
+      console.error('[CourseTransactionPage.fetchParentHours]', error);
+      Taro.showToast({ title: '课时数据加载失败', icon: 'none' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const data = await getSchedules();
+      const now = new Date();
+      const data = await getSchedules({
+        startDate: `${now.getFullYear() - 1}-01-01`,
+        endDate: `${now.getFullYear()}-12-31`,
+      });
       const completedOrToday = Array.isArray(data)
         ? data.filter(l => ['COMPLETED', 'IN_PROGRESS', 'SCHEDULED'].includes(l.status))
             .sort((a, b) => (b.lessonDate || '').localeCompare(a.lessonDate || ''))
@@ -58,7 +88,7 @@ export default function CourseTransactionPage() {
           signInAt: a.signInAt || a.time || undefined,
         })));
       } else {
-        const { students } = await getTeacherStudents({ pageNum: 1, pageSize: 200 }).catch(() => ({ students: [] as Student[] }));
+        const students = await getAllTeacherStudents().catch(() => [] as Student[]);
         setAttendanceList(students.map(s => ({
           ...s,
           attendanceStatus: 'ABSENT',
@@ -87,7 +117,7 @@ export default function CourseTransactionPage() {
       case 'PRESENT': return <Tag type="success">出勤</Tag>;
       case 'ABSENT': return <Tag type="danger">缺勤</Tag>;
       case 'LATE': return <Tag type="warning">迟到</Tag>;
-      case 'EXCUSED': return <Tag type="info">请假</Tag>;
+      case 'LEAVE': return <Tag type="info">请假</Tag>;
       default: return <Tag type="info">未知</Tag>;
     }
   };
@@ -95,7 +125,7 @@ export default function CourseTransactionPage() {
   const presentCount = attendanceList.filter(s => s.attendanceStatus === 'PRESENT').length;
   const absentCount = attendanceList.filter(s => s.attendanceStatus === 'ABSENT').length;
   const lateCount = attendanceList.filter(s => s.attendanceStatus === 'LATE').length;
-  const excusedCount = attendanceList.filter(s => s.attendanceStatus === 'EXCUSED').length;
+  const excusedCount = attendanceList.filter(s => s.attendanceStatus === 'LEAVE').length;
   const totalCount = attendanceList.length;
   const monthCount = lessons.filter(l => {
     const d = l.lessonDate || '';
@@ -104,8 +134,63 @@ export default function CourseTransactionPage() {
     return d.startsWith(ym);
   }).length;
 
+  const showRechargeHelp = () => {
+    Taro.showModal({
+      title: '课时充值',
+      content: '如需充值课时，请通过微信联系管理员。管理员添加课时后，本页面会显示最新余额和充值流水。',
+      showCancel: false,
+      confirmText: '我知道了',
+    });
+  };
+
+  if (isParentHours) {
+    return (
+      <View className={styles.transactionPage}>
+        <Card className={styles.summaryCard}>
+          <View className={styles.summaryHeader}><Text className={styles.summaryLabel}>课时账户</Text></View>
+          <View className={styles.summaryStats}>
+            <View className={styles.statItem}><Text className={styles.statValue}>{hourAccount?.remainingHours ?? 0}</Text><Text className={styles.statLabel}>剩余课时</Text></View>
+            <View className={styles.statDivider} />
+            <View className={styles.statItem}><Text className={styles.statValue}>{hourAccount?.totalHours ?? 0}</Text><Text className={styles.statLabel}>累计课时</Text></View>
+            <View className={styles.statDivider} />
+            <View className={styles.statItem}><Text className={styles.statValue}>{hourAccount?.usedHours ?? 0}</Text><Text className={styles.statLabel}>已用课时</Text></View>
+          </View>
+        </Card>
+        <Card className={styles.rechargeNotice} onClick={showRechargeHelp}>
+          <View className={styles.rechargeNoticeContent}>
+            <Text className={styles.rechargeNoticeTitle}>需要充值课时？</Text>
+            <Text className={styles.rechargeNoticeText}>请通过微信联系管理员，由管理员在管理端为学生添加课时</Text>
+          </View>
+          <Text className={styles.rechargeNoticeAction}>查看说明 ›</Text>
+        </Card>
+        <View className={styles.section}>
+          <Text className={styles.sectionTitle}>课时流水</Text>
+          {isLoading ? (
+            <View className={styles.loading}><Text>加载中...</Text></View>
+          ) : hourTransactions.length === 0 ? (
+            <Card className={styles.emptyCard}><Text className={styles.emptyText}>暂无课时流水</Text></Card>
+          ) : hourTransactions.map((transaction) => (
+            <Card key={transaction.id} className={styles.lessonCard}>
+              <View className={styles.lessonHeader}>
+                <View className={styles.lessonInfo}>
+                  <Text className={styles.lessonName}>{transaction.reason || '课时变动'}</Text>
+                  <Text className={styles.lessonDate}>{transaction.createTime ? formatDate(transaction.createTime) : '-'}</Text>
+                </View>
+                <Tag type={transaction.changeAmount >= 0 ? 'success' : 'warning'}>{transaction.changeAmount >= 0 ? '+' : ''}{transaction.changeAmount}</Tag>
+              </View>
+              <View className={styles.lessonFooter}>
+                <Text className={styles.lessonNo}>变动前：{transaction.beforeBalance}</Text>
+                <Text className={styles.lessonTeacher}>变动后：{transaction.afterBalance}</Text>
+              </View>
+            </Card>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView className={styles.transactionPage} scrollY>
+    <View className={styles.transactionPage}>
       <Card className={styles.summaryCard}>
         <View className={styles.summaryHeader}>
           <Text className={styles.summaryLabel}>课程统计</Text>
@@ -144,7 +229,7 @@ export default function CourseTransactionPage() {
             <Card key={lesson.id} className={styles.lessonCard} onClick={() => handleLessonClick(lesson)}>
               <View className={styles.lessonHeader}>
                 <View className={styles.lessonInfo}>
-                  <Text className={styles.lessonName}>体育课</Text>
+                  <Text className={styles.lessonName}>{lesson.courseName || `课程 #${lesson.courseId}`}</Text>
                   <Text className={styles.lessonDate}>{formatDate(lesson.lessonDate)} {lesson.startTime} - {lesson.endTime}</Text>
                 </View>
                 {getStatusTag(lesson.status)}
@@ -224,6 +309,6 @@ export default function CourseTransactionPage() {
           </View>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }

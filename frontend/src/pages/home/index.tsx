@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
@@ -8,6 +8,7 @@ import { getSchedules } from '@/services/api';
 import { formatDate } from '@/utils/format';
 import useAuthStore from '@/store/auth';
 import { notifyTabBarActive } from '@/utils/tabbar';
+import BottomNav from '@/components/BottomNav';
 import styles from './index.module.scss';
 
 interface CalendarDay {
@@ -23,27 +24,45 @@ interface CalendarDay {
 }
 
 export default function HomePage() {
-  Taro.useDidShow(() => notifyTabBarActive('/pages/home/index'));
+  Taro.useDidShow(() => {
+    notifyTabBarActive('/pages/home/index');
+    fetchSchedules(currentMonth);
+  });
   const [schedules, setSchedules] = useState<Lesson[]>([]);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const scheduleRequestId = useRef(0);
   const { user, profile } = useAuthStore();
   const isParent = user?.role === 'PARENT';
 
   useEffect(() => {
-    fetchSchedules();
-  }, []);
+    fetchSchedules(currentMonth);
+  }, [currentMonth]);
 
-  const fetchSchedules = async () => {
+  const fetchSchedules = async (month: Date) => {
+    const requestId = ++scheduleRequestId.current;
     setIsLoading(true);
+    setLoadError(false);
+    setSchedules([]);
     try {
-      const data = await getSchedules();
-      setSchedules(data);
+      const year = month.getFullYear();
+      const monthIndex = month.getMonth();
+      const start = new Date(year, monthIndex, 1);
+      start.setDate(start.getDate() - start.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 41);
+      const data = await getSchedules({
+        startDate: formatDate(start),
+        endDate: formatDate(end),
+      });
+      if (requestId === scheduleRequestId.current) setSchedules(data);
     } catch (err) {
       console.error('[HomePage]', err);
+      if (requestId === scheduleRequestId.current) setLoadError(true);
     } finally {
-      setIsLoading(false);
+      if (requestId === scheduleRequestId.current) setIsLoading(false);
     }
   };
 
@@ -122,21 +141,28 @@ export default function HomePage() {
   };
 
   const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+    const month = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    setCurrentMonth(month);
+    setSelectedDate(formatDate(month));
   };
 
   const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+    const month = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+    setCurrentMonth(month);
+    setSelectedDate(formatDate(month));
   };
 
   const handleCourseClick = (lesson: Lesson) => {
-    Taro.navigateTo({ url: `/pages/course-detail/index?id=${lesson.id}` });
+    Taro.navigateTo({ url: `/pages/course-detail/index?id=${lesson.id}&date=${lesson.lessonDate}` });
   };
 
   const selectedCourses = getCoursesForDate(selectedDate);
 
   return (
-    <ScrollView className={styles.homePage} scrollY>
+    <View className={styles.homePage}>
+      <Card onClick={() => Taro.navigateTo({ url: '/pages/schedule/index' })}>
+        <Text>查看我的一周课表 ›</Text>
+      </Card>
       {isParent && (
         <Card className={styles.studentCard}>
           <View className={styles.studentInfo}>
@@ -189,6 +215,10 @@ export default function HomePage() {
           <View className={styles.loading}>
             <Text>加载中...</Text>
           </View>
+        ) : loadError ? (
+          <Card className={styles.emptyCard} onClick={() => fetchSchedules(currentMonth)}>
+            <Text className={styles.emptyText}>课程加载失败，点击重试</Text>
+          </Card>
         ) : selectedCourses.length === 0 ? (
           <Card className={styles.emptyCard}>
             <Text className={styles.emptyText}>当日暂无课程安排</Text>
@@ -210,9 +240,9 @@ export default function HomePage() {
                 {lesson.status === 'CANCELLED' && <Tag type="danger">已取消</Tag>}
               </View>
               <View className={styles.courseBody}>
-                <Text className={styles.courseName}>体育课</Text>
+                <Text className={styles.courseName}>{lesson.courseName || `课程 #${lesson.courseId}`}</Text>
                 {isParent ? (
-                  <Text className={styles.courseInfo}>授课老师: 张老师</Text>
+                  <Text className={styles.courseInfo}>授课老师: {lesson.teacherName || `教师 #${lesson.teacherId}`}</Text>
                 ) : (
                   <Text className={styles.courseInfo}>课程编号: {lesson.lessonNo}</Text>
                 )}
@@ -226,6 +256,7 @@ export default function HomePage() {
           ))
         )}
       </View>
-    </ScrollView>
+      <BottomNav />
+    </View>
   );
 }

@@ -17,9 +17,9 @@ export interface PhysicalScoreDetail {
   recordId?: string;
   itemId: string;
   itemName?: string;
-  rawValue: number;
-  convertedScore: number;
-  level: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
+  rawValue?: number;
+  convertedScore?: number;
+  level?: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
   remark?: string;
   score?: number;
   unit?: string;
@@ -35,7 +35,7 @@ export interface PhysicalTestRecord {
   overallLevel?: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
   scoreLevel?: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
   gradeLevel?: string;
-  status?: 'DRAFT' | 'CONFIRMED';
+  status?: 'DRAFT' | 'SUBMITTED' | 'CONFIRMED';
   remark?: string;
   evaluation?: string;
   createTime?: string;

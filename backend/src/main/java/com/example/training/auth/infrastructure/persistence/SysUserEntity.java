@@ -21,11 +21,14 @@ public class SysUserEntity {
     private String passwordHash;
     private String role;
     private String phone;
+    private String nickname;
+    private String avatarUrl;
     private String wechatOpenid;
     private String wechatUnionid;
     private String status;
     private LocalDateTime lastLoginAt;
     private LocalDateTime passwordUpdatedAt;
+    private Integer tokenVersion;
     
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
@@ -45,6 +48,10 @@ public class SysUserEntity {
     public void setRole(String role) { this.role = role; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+    public String getNickname() { return nickname; }
+    public void setNickname(String nickname) { this.nickname = nickname; }
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
     public String getWechatOpenid() { return wechatOpenid; }
     public void setWechatOpenid(String wechatOpenid) { this.wechatOpenid = wechatOpenid; }
     public String getWechatUnionid() { return wechatUnionid; }
@@ -55,6 +62,8 @@ public class SysUserEntity {
     public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public LocalDateTime getPasswordUpdatedAt() { return passwordUpdatedAt; }
     public void setPasswordUpdatedAt(LocalDateTime passwordUpdatedAt) { this.passwordUpdatedAt = passwordUpdatedAt; }
+    public Integer getTokenVersion() { return tokenVersion; }
+    public void setTokenVersion(Integer tokenVersion) { this.tokenVersion = tokenVersion; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

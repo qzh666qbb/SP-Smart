@@ -26,6 +26,8 @@ public interface TeacherRepository {
 
     Optional<TeacherPreRegister> findPreRegisterByPhone(String phone);
 
+    Optional<TeacherPreRegister> findPreRegisterById(Long id);
+
     List<TeacherPreRegister> findPreRegisters(String keyword, int pageNum, int pageSize);
 
     long countPreRegisters(String keyword);

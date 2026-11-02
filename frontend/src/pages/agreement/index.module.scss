@@ -1,0 +1,65 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $spacing-xl;
+  box-sizing: border-box;
+}
+
+.header {
+  padding: $spacing-lg 0;
+}
+
+.title,
+.updatedAt,
+.intro,
+.heading,
+.body {
+  display: block;
+}
+
+.title {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.updatedAt {
+  margin-top: $spacing-sm;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.content {
+  height: calc(100vh - 180rpx);
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-xl;
+  box-sizing: border-box;
+}
+
+.intro {
+  margin-bottom: $spacing-xl;
+  font-size: $font-size-sm;
+  line-height: 1.8;
+  color: $color-text-secondary;
+}
+
+.section {
+  margin-bottom: $spacing-xl;
+}
+
+.heading {
+  margin-bottom: $spacing-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.body {
+  font-size: $font-size-sm;
+  line-height: 1.9;
+  color: $color-text-secondary;
+  text-align: justify;
+}

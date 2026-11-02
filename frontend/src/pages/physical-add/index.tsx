@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Input, ScrollView } from '@tarojs/components';
+import { View, Text, Input, ScrollView, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
-import { addPhysicalTest, getTeacherStudents, getPhysicalTestItems } from '@/services/api';
+import { addPhysicalTest, getAllTeacherStudents, getPhysicalTestItems, getPhysicalTestBatches } from '@/services/api';
 import { Student } from '@/types';
 import styles from './index.module.scss';
 
@@ -17,14 +17,6 @@ interface ScoreItem {
   level: 'EXCELLENT' | 'GOOD' | 'PASS' | 'FAIL';
 }
 
-const defaultItems: ScoreItem[] = [
-  { itemId: '1', itemName: '身高', unit: 'cm', rawValue: '', convertedScore: '', level: 'PASS' },
-  { itemId: '2', itemName: '体重', unit: 'kg', rawValue: '', convertedScore: '', level: 'PASS' },
-  { itemId: '3', itemName: '50米跑', unit: '秒', rawValue: '', convertedScore: '', level: 'PASS' },
-  { itemId: '4', itemName: '立定跳远', unit: 'cm', rawValue: '', convertedScore: '', level: 'PASS' },
-  { itemId: '5', itemName: '坐位体前屈', unit: 'cm', rawValue: '', convertedScore: '', level: 'PASS' },
-];
-
 export default function PhysicalAddPage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
@@ -32,7 +24,9 @@ export default function PhysicalAddPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStudentSelector, setShowStudentSelector] = useState(false);
   const [studentSearchKeyword, setStudentSearchKeyword] = useState('');
-  const [scores, setScores] = useState<ScoreItem[]>(defaultItems);
+  const [scores, setScores] = useState<ScoreItem[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
 
   useEffect(() => {
     fetchStudentsAndItems();
@@ -41,21 +35,22 @@ export default function PhysicalAddPage() {
   const fetchStudentsAndItems = async () => {
     setIsLoadingStudents(true);
     try {
-      const [sRes, items] = await Promise.all([
-        getTeacherStudents({ pageNum: 1, pageSize: 200 }),
-        getPhysicalTestItems().catch(() => []),
+      const [studentList, items, batchList] = await Promise.all([
+        getAllTeacherStudents(),
+        getPhysicalTestItems(),
+        getPhysicalTestBatches(),
       ]);
-      setStudents(sRes.students || []);
-      if (Array.isArray(items) && items.length > 0) {
-        setScores(items.map((it: any, idx) => ({
-          itemId: String(it.id ?? idx + 1),
-          itemName: it.name || it.itemName || defaultItems[idx]?.itemName || ('项目' + (idx + 1)),
-          unit: it.unit || defaultItems[idx]?.unit || '',
+      setStudents(studentList);
+      setBatches(Array.isArray(batchList) ? batchList : []);
+      if (!Array.isArray(items) || items.length === 0) throw new Error('没有可用的体测项目');
+      setScores(items.map((it: any, idx) => ({
+          itemId: String(it.id ?? it.itemId ?? ''),
+          itemName: it.name || it.itemName || ('项目' + (idx + 1)),
+          unit: it.unit || '',
           rawValue: '',
           convertedScore: '',
           level: 'PASS' as const,
-        })));
-      }
+        })).filter((it: ScoreItem) => Boolean(it.itemId)));
     } catch (err) {
       console.error('[PhysicalAddPage.fetch]', err);
       Taro.showToast({ title: '加载失败', icon: 'none' });
@@ -90,6 +85,15 @@ export default function PhysicalAddPage() {
       Taro.showToast({ title: '请选择学员', icon: 'none' });
       return;
     }
+    const selectedBatch = batches[selectedBatchIndex];
+    if (!selectedBatch?.id) {
+      Taro.showToast({ title: '请选择有效体测批次', icon: 'none' });
+      return;
+    }
+    if (scores.length === 0) {
+      Taro.showToast({ title: '体测项目加载失败，请刷新重试', icon: 'none' });
+      return;
+    }
 
     for (const score of scores) {
       if (!score.rawValue || !score.convertedScore) {
@@ -101,6 +105,7 @@ export default function PhysicalAddPage() {
     setIsSubmitting(true);
     try {
       const params = {
+        batchId: selectedBatch.id,
         studentId: selectedStudent.id,
         scores: scores.map(s => ({
           itemId: s.itemId,
@@ -177,7 +182,7 @@ export default function PhysicalAddPage() {
   };
 
   return (
-    <ScrollView className={styles.addPage} scrollY>
+    <View className={styles.addPage}>
       <View className={styles.container}>
         <Card className={styles.studentCard} onClick={() => setShowStudentSelector(true)}>
           <Text className={styles.studentLabel}>测试学员</Text>
@@ -194,6 +199,27 @@ export default function PhysicalAddPage() {
           )}
           <Text className={styles.arrow}>›</Text>
         </Card>
+
+        <Card className={styles.studentCard}>
+          <Text className={styles.studentLabel}>体测批次</Text>
+          <Picker
+            mode="selector"
+            range={batches}
+            rangeKey="batchName"
+            value={selectedBatchIndex}
+            onChange={(e) => setSelectedBatchIndex(Number(e.detail.value))}
+          >
+            <Text className={styles.studentPlaceholder}>
+              {batches[selectedBatchIndex]?.batchName || '暂无可用批次'}
+            </Text>
+          </Picker>
+        </Card>
+
+        {scores.length === 0 && (
+          <Card className={styles.scoreCard}>
+            <Text className={styles.studentPlaceholder}>体测项目未加载，暂时不能提交</Text>
+          </Card>
+        )}
 
         {scores.map((score, index) => (
           <Card key={score.itemId} className={styles.scoreCard}>
@@ -242,7 +268,7 @@ export default function PhysicalAddPage() {
           </Card>
         ))}
 
-        <CustomButton type="primary" size="lg" onClick={handleSubmit} disabled={isSubmitting}>
+        <CustomButton type="primary" size="lg" onClick={handleSubmit} disabled={isSubmitting || scores.length === 0 || batches.length === 0}>
           {isSubmitting ? '提交中...' : '确认提交'}
         </CustomButton>
       </View>
@@ -275,6 +301,6 @@ export default function PhysicalAddPage() {
           </View>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }

@@ -132,16 +132,16 @@ class AuthenticationControllerTest {
             wxResult.put("role", "PARENT");
             wxResult.put("username", "wx_user");
             WechatLoginRequest req = WechatLoginRequest.builder()
-                    .openid("o-test-openid")
-                    .unionid("u-test-unionid")
+                    .code("wx-login-code")
+                    .role("PARENT")
                     .build();
-            when(authenticationService.loginByWechat("o-test-openid", "u-test-unionid")).thenReturn(wxResult);
+            when(authenticationService.loginByWechat("wx-login-code", "PARENT", null, null)).thenReturn(wxResult);
 
             ApiResponse<Map<String, Object>> resp = authenticationController.loginByWechat(req);
 
             assertEquals(0, resp.getCode());
             assertEquals("PARENT", resp.getData().get("role"));
-            verify(authenticationService).loginByWechat("o-test-openid", "u-test-unionid");
+            verify(authenticationService).loginByWechat("wx-login-code", "PARENT", null, null);
         }
     }
 

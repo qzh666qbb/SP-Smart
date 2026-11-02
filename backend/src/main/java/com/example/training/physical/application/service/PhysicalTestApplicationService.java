@@ -4,7 +4,10 @@ import com.example.training.common.exception.BusinessException;
 import com.example.training.common.exception.ErrorCode;
 import com.example.training.common.response.PageResult;
 import com.example.training.common.security.CurrentUser;
+import com.example.training.auth.domain.repository.UserRepository;
 import com.example.training.physical.application.dto.PhysicalTestCreateRequest;
+import com.example.training.physical.application.dto.PhysicalTestBatchCreateRequest;
+import com.example.training.physical.domain.model.PhysicalTestBatch;
 import com.example.training.physical.domain.model.PhysicalScoreDetail;
 import com.example.training.physical.domain.model.PhysicalTestItem;
 import com.example.training.physical.domain.model.PhysicalTestRecord;
@@ -36,9 +39,12 @@ public class PhysicalTestApplicationService {
     private final PhysicalTestRepository physicalTestRepository;
     private final PhysicalScoringEngine scoringEngine;
     private final StudentRepository studentRepository;
+    private final UserRepository userRepository;
     
     @Transactional
     public PhysicalTestRecord createTestRecord(PhysicalTestCreateRequest request, CurrentUser currentUser) {
+        requireAvailableBatch(request.getBatchId());
+        Student student = requireStudentAndItems(request);
         String recordNo = "PHY" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         
         PhysicalTestRecord record = PhysicalTestRecord.builder()
@@ -53,7 +59,6 @@ public class PhysicalTestApplicationService {
         
         PhysicalTestRecord savedRecord = physicalTestRepository.saveRecord(record);
         
-        Student student = studentRepository.findById(request.getStudentId()).orElse(null);
         String gender = student != null ? student.getGender() : null;
         LocalDate birthDate = student != null ? student.getBirthDate() : null;
         LocalDate testDate = request.getTestDate() != null ? request.getTestDate() : LocalDate.now();
@@ -114,7 +119,7 @@ public class PhysicalTestApplicationService {
         physicalTestRepository.saveRecord(savedRecord);
         log.info("创建体测记录: recordNo={}, studentId={}, totalScore={}", recordNo, request.getStudentId(), finalTotal);
         
-        return savedRecord;
+        return enrichRecord(savedRecord);
     }
     
     private String calculateOverallLevel(BigDecimal totalScore) {
@@ -135,20 +140,39 @@ public class PhysicalTestApplicationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND));
         
         record.setStatus("CONFIRMED");
-        return physicalTestRepository.saveRecord(record);
+        return enrichRecord(physicalTestRepository.saveRecord(record));
     }
     
     public PhysicalTestRecord getRecordById(Long recordId) {
-        return physicalTestRepository.findRecordById(recordId)
+        PhysicalTestRecord record = physicalTestRepository.findRecordById(recordId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND));
+        return enrichRecord(record);
     }
     
     public List<PhysicalTestRecord> getRecordsByStudent(Long studentId) {
-        return physicalTestRepository.findByStudentId(studentId);
+        return physicalTestRepository.findByStudentId(studentId).stream().map(this::enrichRecord).toList();
     }
     
     public List<PhysicalTestItem> getAllEnabledItems() {
         return physicalTestRepository.findAllEnabledItems();
+    }
+
+    public List<PhysicalTestBatch> getAvailableBatches() {
+        return physicalTestRepository.findAvailableBatches();
+    }
+
+    @Transactional
+    public PhysicalTestBatch createBatch(PhysicalTestBatchCreateRequest request, CurrentUser currentUser) {
+        Long templateId = physicalTestRepository.findDefaultTemplateId();
+        if (templateId == null) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "没有可用的体测模板");
+        }
+        String code = "PHY-" + request.getTestDate().toString().replace("-", "") + "-"
+                + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        return physicalTestRepository.saveBatch(PhysicalTestBatch.builder()
+                .batchName(request.getBatchName().trim()).batchCode(code).templateId(templateId)
+                .testDate(request.getTestDate()).location(request.getLocation())
+                .status("IN_PROGRESS").createdBy(currentUser.getUserId()).build());
     }
     
     public List<PhysicalScoreDetail> getScoreDetails(Long recordId) {
@@ -160,7 +184,22 @@ public class PhysicalTestApplicationService {
     }
 
     public PageResult<PhysicalTestRecord> listTestRecordsPage(Long testerId, String keyword, int pageNum, int pageSize) {
-        List<PhysicalTestRecord> all = physicalTestRepository.findByTesterId(testerId);
+        return listTestRecordsPage(testerId, null, keyword, pageNum, pageSize);
+    }
+
+    public PageResult<PhysicalTestRecord> listTestRecordsPageForTeacher(
+            Long teacherProfileId, String keyword, int pageNum, int pageSize) {
+        return listTestRecordsPage(null, teacherProfileId, keyword, pageNum, pageSize);
+    }
+
+    private PageResult<PhysicalTestRecord> listTestRecordsPage(
+            Long testerId, Long teacherProfileId, String keyword, int pageNum, int pageSize) {
+        int pn = Math.max(1, pageNum);
+        int ps = Math.min(500, Math.max(1, pageSize));
+        List<PhysicalTestRecord> all = physicalTestRepository.findByTesterId(testerId).stream()
+                .filter(record -> teacherProfileId == null
+                        || studentRepository.existsByTeacherAndStudentId(teacherProfileId, record.getStudentId()))
+                .toList();
         String kw = keyword == null ? null : keyword.trim().toLowerCase();
         java.util.Set<Long> matchedStudentIds = null;
         if (kw != null && !kw.isEmpty()) {
@@ -183,10 +222,10 @@ public class PhysicalTestApplicationService {
                         || contains(r.getTestDate() == null ? null : r.getTestDate().toString(), kw)
                         || (r.getStudentId() != null && matchedIds != null && matchedIds.contains(r.getStudentId())))
                 .collect(java.util.stream.Collectors.toList());
-        int from = Math.max(0, (pageNum - 1) * pageSize);
-        int to = Math.min(from + pageSize, filtered.size());
+        int from = Math.max(0, (pn - 1) * ps);
+        int to = Math.min(from + ps, filtered.size());
         List<PhysicalTestRecord> page = from >= filtered.size() ? new ArrayList<>() : new ArrayList<>(filtered.subList(from, to));
-        return PageResult.of(page, filtered.size(), pageNum, pageSize);
+        return PageResult.of(page.stream().map(this::enrichRecord).toList(), filtered.size(), pn, ps);
     }
 
     private static boolean contains(String src, String lowerKw) {
@@ -198,17 +237,22 @@ public class PhysicalTestApplicationService {
     public PhysicalTestRecord updateRecord(Long recordId, PhysicalTestCreateRequest request, CurrentUser currentUser) {
         PhysicalTestRecord record = physicalTestRepository.findRecordById(recordId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND));
+        if (!record.getStudentId().equals(request.getStudentId())) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "不能修改体测记录所属学员");
+        }
+        requireAvailableBatch(request.getBatchId());
+        Student student = requireStudentAndItems(request);
         
         if ("CONFIRMED".equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "已确认的记录不能修改");
         }
         
         record.setTestDate(request.getTestDate());
+        record.setBatchId(request.getBatchId());
         record.setRemark(request.getRemark());
         
         physicalTestRepository.deleteScoreDetails(recordId);
         
-        Student student = studentRepository.findById(request.getStudentId()).orElse(null);
         String gender = student != null ? student.getGender() : null;
         LocalDate birthDate = student != null ? student.getBirthDate() : null;
         LocalDate testDate = request.getTestDate() != null ? request.getTestDate() : LocalDate.now();
@@ -265,12 +309,55 @@ public class PhysicalTestApplicationService {
         record.setTotalScore(finalTotal);
         record.setOverallLevel(finalLevel);
         
-        return physicalTestRepository.saveRecord(record);
+        return enrichRecord(physicalTestRepository.saveRecord(record));
     }
     
     public PhysicalTestRecord getLatestRecord(Long studentId) {
-        return physicalTestRepository.findLatestByStudentId(studentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND));
+        return enrichRecord(physicalTestRepository.findLatestByStudentId(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PHYSICAL_TEST_NOT_FOUND)));
+    }
+
+    private PhysicalTestRecord enrichRecord(PhysicalTestRecord record) {
+        if (record == null) return null;
+        if (record.getStudentId() != null) {
+            studentRepository.findById(record.getStudentId()).ifPresent(student -> record.setStudentName(student.getName()));
+        }
+        if (record.getTesterId() != null) {
+            userRepository.findTeacherProfileByUserId(record.getTesterId())
+                    .ifPresent(profile -> record.setTeacherName(profile.getName()));
+        }
+        if (record.getId() != null) {
+            List<PhysicalScoreDetail> details = physicalTestRepository.findByRecordId(record.getId());
+            for (PhysicalScoreDetail detail : details) {
+                physicalTestRepository.findItemById(detail.getItemId()).ifPresent(item -> {
+                    detail.setItemName(item.getItemName());
+                    detail.setUnit(item.getUnit());
+                });
+            }
+            record.setDetails(details);
+        }
+        return record;
+    }
+
+    private Student requireStudentAndItems(PhysicalTestCreateRequest request) {
+        Student student = studentRepository.findById(request.getStudentId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+        for (PhysicalTestCreateRequest.ScoreDetail detail : request.getScores()) {
+            PhysicalTestItem item = physicalTestRepository.findItemById(detail.getItemId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_VALID_ERROR, "体测项目不存在"));
+            if (!item.isEnabled()) {
+                throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "体测项目已停用");
+            }
+        }
+        return student;
+    }
+
+    private void requireAvailableBatch(Long batchId) {
+        PhysicalTestBatch batch = physicalTestRepository.findBatchById(batchId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_VALID_ERROR, "体测批次不存在"));
+        if (!"PENDING".equals(batch.getStatus()) && !"IN_PROGRESS".equals(batch.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "体测批次不可用");
+        }
     }
 
     @Transactional

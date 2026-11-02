@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Input, Textarea } from '@tarojs/components';
+import { View, Text, Input, Textarea } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import CustomButton from '@/components/Button';
@@ -60,7 +60,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <ScrollView className={styles.settingsPage} scrollY>
+    <View className={styles.settingsPage}>
       <Card className={styles.formCard}>
         <Text className={styles.formTitle}>个人信息</Text>
 
@@ -131,6 +131,6 @@ export default function SettingsPage() {
           {isSubmitting ? '保存中...' : '保存信息'}
         </CustomButton>
       </Card>
-    </ScrollView>
+    </View>
   );
 }

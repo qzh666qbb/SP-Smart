@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
 import CustomButton from '@/components/Button';
 import { Lesson, ParentProfile, Student } from '@/types';
-import { getLessons, getParentStudents, signIn } from '@/services/api';
+import { getLessons, getParentStudents, parentSignIn } from '@/services/api';
 import { formatDate } from '@/utils/format';
 import useAuthStore from '@/store/auth';
 import styles from './index.module.scss';
@@ -16,6 +16,8 @@ export default function ParentCoursePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signedLessonIds, setSignedLessonIds] = useState<string[]>([]);
+  const lessonsRequestId = useRef(0);
   const { profile } = useAuthStore();
   const parentProfile = profile as ParentProfile;
 
@@ -31,29 +33,44 @@ export default function ParentCoursePage() {
 
   const fetchStudents = async () => {
     try {
-      const students = await getParentStudents();
-      setStudents(students || []);
-      if (students && students.length > 0) {
-        setSelectedStudent(students[0]);
+      const nextStudents = await getParentStudents();
+      setStudents(nextStudents || []);
+      if (nextStudents && nextStudents.length > 0) {
+        setSelectedStudent(nextStudents[0]);
+      } else {
+        lessonsRequestId.current += 1;
+        setSelectedStudent(null);
+        setLessons([]);
+        setIsLoading(false);
       }
     } catch (err) {
       console.error('[ParentCoursePage]', err);
       if (parentProfile?.students && parentProfile.students.length > 0) {
         setStudents(parentProfile.students);
         setSelectedStudent(parentProfile.students[0]);
+      } else {
+        setIsLoading(false);
       }
     }
   };
 
   const fetchLessons = async (studentId: string) => {
+    const requestId = ++lessonsRequestId.current;
     setIsLoading(true);
     try {
-      const data = await getLessons({ studentId });
-      setLessons(data);
+      const now = new Date();
+      const start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+      const data = await getLessons({
+        studentId,
+        startDate: formatDate(start),
+        endDate: formatDate(end),
+      });
+      if (requestId === lessonsRequestId.current) setLessons(data);
     } catch (err) {
       console.error('[ParentCoursePage]', err);
     } finally {
-      setIsLoading(false);
+      if (requestId === lessonsRequestId.current) setIsLoading(false);
     }
   };
 
@@ -74,6 +91,9 @@ export default function ParentCoursePage() {
 
   const getAttendanceStatus = (lesson: Lesson) => {
     if (!selectedStudent) return null;
+    if (signedLessonIds.includes(lesson.id)) {
+      return { status: 'PRESENT', label: '已签到', type: 'success' };
+    }
     const attendance = lesson.studentAttendance?.[selectedStudent.id];
     if (attendance) {
       if (attendance === 'PRESENT') return { status: 'PRESENT', label: '已签到', type: 'success' };
@@ -91,9 +111,9 @@ export default function ParentCoursePage() {
     
     setIsSigningIn(true);
     try {
-      await signIn({ lessonId: lesson.id, studentIds: [selectedStudent.id] });
+      await parentSignIn({ lessonId: lesson.id, studentId: selectedStudent.id });
+      setSignedLessonIds((ids) => ids.includes(lesson.id) ? ids : [...ids, lesson.id]);
       Taro.showToast({ title: '签到成功', icon: 'success' });
-      fetchLessons(selectedStudent.id);
     } catch (err) {
       console.error('[ParentCoursePage]', err);
       Taro.showToast({ title: '签到失败', icon: 'none' });
@@ -102,14 +122,32 @@ export default function ParentCoursePage() {
     }
   };
 
+  const handleStudentChange = (e: any) => {
+    const student = students[Number(e.detail.value)];
+    if (student) {
+      setLessons([]);
+      setSignedLessonIds([]);
+      setSelectedStudent(student);
+    }
+  };
+
   return (
-    <ScrollView className={styles.coursePage} scrollY>
+    <View className={styles.coursePage}>
       {students.length > 0 && (
-        <Card className={styles.studentCard}>
-          <View className={styles.studentInfo}>
-            <Text className={styles.studentName}>{selectedStudent?.name || '孩子姓名'}</Text>
-            <Text className={styles.studentNo}>学号: {selectedStudent?.studentNo || '--'}</Text>
-          </View>
+        <Picker mode="selector" range={students.map((s) => s.name)} onChange={handleStudentChange}>
+          <Card className={styles.studentCard}>
+            <View className={styles.studentInfo}>
+              <Text className={styles.studentName}>{selectedStudent?.name || '孩子姓名'}</Text>
+              <Text className={styles.studentNo}>学号: {selectedStudent?.studentNo || '--'}</Text>
+            </View>
+            <Text className={styles.arrow}>›</Text>
+          </Card>
+        </Picker>
+      )}
+
+      {!isLoading && students.length === 0 && (
+        <Card className={styles.emptyCard} onClick={() => Taro.navigateTo({ url: '/pages/child-add-edit/index?isFirst=1' })}>
+          <Text className={styles.emptyText}>暂无孩子资料，点击添加</Text>
         </Card>
       )}
 
@@ -155,13 +193,13 @@ export default function ParentCoursePage() {
               <Card key={lesson.id} className={styles.lessonCard}>
                 <View className={styles.lessonHeader}>
                   <View className={styles.lessonInfo}>
-                    <Text className={styles.lessonName}>{lesson.courseName || '体育课'}</Text>
+                    <Text className={styles.lessonName}>{lesson.courseName || `课程 #${lesson.courseId}`}</Text>
                     <Text className={styles.lessonDate}>{formatDate(lesson.lessonDate)} {lesson.startTime} - {lesson.endTime}</Text>
                   </View>
                   {getStatusTag(lesson.status)}
                 </View>
                 <View className={styles.lessonFooter}>
-                  <Text className={styles.lessonTeacher}>授课老师: {lesson.teacherName || '张老师'}</Text>
+                  <Text className={styles.lessonTeacher}>授课老师: {lesson.teacherName || `教师 #${lesson.teacherId}`}</Text>
                   {attendance ? (
                     <Tag type={attendance.type as any}>{attendance.label}</Tag>
                   ) : canSignIn ? (
@@ -175,6 +213,6 @@ export default function ParentCoursePage() {
           })
         )}
       </View>
-    </ScrollView>
+    </View>
   );
 }

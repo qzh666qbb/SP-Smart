@@ -19,6 +19,8 @@ public interface UserRepository {
     
     Optional<User> findByWechatOpenid(String openid);
 
+    Optional<User> findByWechatUnionid(String unionid);
+
     List<User> findAll(int pageNum, int pageSize);
 
     List<User> findAll(String keyword, String role, int pageNum, int pageSize);
@@ -30,6 +32,8 @@ public interface UserRepository {
     TeacherProfile saveTeacherProfile(TeacherProfile profile);
     
     Optional<TeacherProfile> findTeacherProfileByUserId(Long userId);
+
+    Optional<TeacherProfile> findTeacherProfileById(Long profileId);
     
     ParentProfile saveParentProfile(ParentProfile profile);
     

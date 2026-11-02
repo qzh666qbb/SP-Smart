@@ -25,3 +25,40 @@ page {
   height: 0;
   background: transparent;
 }
+/* Custom tab bar styles must be global: the special custom-tab-bar bundle does
+ * not load CSS Modules in WeChat's webview. */
+.custom-tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100rpx;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  background: #ffffff;
+  border-top: 1rpx solid #f0f0f0;
+  z-index: 999;
+}
+
+.custom-tab-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-tab-text {
+  font-size: 28rpx;
+  line-height: 1;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.custom-tab-item-active .custom-tab-text {
+  color: #3b82f6;
+  font-weight: 600;
+}

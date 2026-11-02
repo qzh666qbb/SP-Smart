@@ -4,9 +4,11 @@ import devConfig from './dev';
 import prodConfig from './prod';
 
 export default defineConfig<'webpack5'>(async (merge) => {
-  const DEFAULT_DEV_API = 'http://localhost:8080/api';
-  const apiBaseUrl = process.env.TARO_API_BASE_URL ||
-    (process.env.NODE_ENV === 'production' ? '' : DEFAULT_DEV_API);
+  // The mini-program cannot reach a backend bound to the developer machine's
+  // localhost. Keep the deployed API as the default, while allowing local
+  // development to override it with TARO_API_BASE_URL.
+  const DEFAULT_API = 'https://spsmart.club/api';
+  const apiBaseUrl = process.env.TARO_API_BASE_URL || DEFAULT_API;
 
   const baseConfig: UserConfigExport<'webpack5'> = {
     projectName: 'sp-smart-parent',

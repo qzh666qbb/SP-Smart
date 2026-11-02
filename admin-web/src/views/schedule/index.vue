@@ -22,8 +22,17 @@
       <el-table :data="tableData" class="custom-table" :row-class-name="tableRowClassName" style="width: 100%;">
         <el-table-column prop="id" label="ID" width="50" />
         <el-table-column prop="scheduleName" label="排课名称" min-width="120" />
-        <el-table-column prop="courseName" label="课程名称" min-width="100" />
-        <el-table-column prop="teacherName" label="授课老师" min-width="90" />
+        <el-table-column label="课程名称" min-width="100">
+          <template #default="{ row }">{{ row.courseName || getCourseName(row.courseId) }}</template>
+        </el-table-column>
+        <el-table-column label="授课老师" min-width="180">
+          <template #default="{ row }">
+            <div>主教：{{ row.teacherName || getTeacherName(row.teacherId) }}</div>
+            <div v-if="row.assistantTeacherId1 || row.assistantTeacherId2" class="assistant-text">
+              助教：{{ getAssistantNames(row) }}
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="startDate" label="开始日期" width="110" />
         <el-table-column prop="endDate" label="结束日期" width="110" />
         <el-table-column prop="startTime" label="开始时间" width="80" />
@@ -67,9 +76,19 @@
             <el-option v-for="course in courses" :key="course.id" :label="course.courseName || course.name" :value="course.id" />
           </el-select>
         </el-form-item>
-        <el-form-item prop="teacherId" label="授课老师">
-          <el-select v-model="form.teacherId" placeholder="请选择授课老师" filterable style="width: 100%">
-            <el-option v-for="u in teachers" :key="u.id" :label="u.username" :value="u.id" />
+        <el-form-item prop="teacherId" label="主教">
+          <el-select v-model="form.teacherId" placeholder="请选择 1 位主教" filterable style="width: 100%" @change="handlePrimaryTeacherChange">
+            <el-option v-for="u in teachers" :key="u.profileId" :label="u.profileName || u.username" :value="u.profileId" />
+          </el-select>
+        </el-form-item>
+        <el-form-item prop="assistantTeacherIds" label="助教">
+          <el-select v-model="form.assistantTeacherIds" multiple :multiple-limit="2" placeholder="可选择最多 2 位助教" filterable style="width: 100%">
+            <el-option v-for="u in assistantTeacherOptions" :key="u.profileId" :label="u.profileName || u.username" :value="u.profileId" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="!isEdit" prop="studentIds" label="上课学员">
+          <el-select v-model="form.studentIds" multiple filterable collapse-tags placeholder="请选择学员" style="width: 100%">
+            <el-option v-for="s in students" :key="s.id" :label="`${s.name}（${s.studentNo || s.id}）`" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item prop="recurrenceType" label="排课类型">
@@ -114,13 +133,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { scheduleTimeError } from '@/utils/scheduleTime'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getCourses, getUsers } from '@/api'
+import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getAllCourses, getAllUsers, getAllStudents } from '@/api'
 
 const tableData = ref([])
 const courses = ref([])
 const teachers = ref([])
+const students = ref([])
 const searchForm = reactive({ keyword: '', date: '' })
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showAddModal = ref(false)
@@ -132,6 +153,8 @@ const form = reactive({
   seriesName: '',
   courseId: '',
   teacherId: '',
+  assistantTeacherIds: [],
+  studentIds: [],
   classGroupId: null,
   recurrenceType: 'NONE',
   weekDays: [],
@@ -146,25 +169,50 @@ const rules = {
   seriesName: [{ required: true, message: '请输入排课名称', trigger: 'blur' }],
   courseId: [{ required: true, message: '请选择课程', trigger: 'change' }],
   teacherId: [{ required: true, message: '请选择授课老师', trigger: 'change' }],
+  studentIds: [{ type: 'array', required: true, min: 1, message: '请至少选择一名学员', trigger: 'change' }],
   recurrenceType: [{ required: true, message: '请选择排课类型', trigger: 'change' }],
+  weekDays: [{ validator: (_rule, value, callback) => {
+    if (form.recurrenceType === 'WEEKLY' && (!Array.isArray(value) || value.length === 0)) callback(new Error('请选择星期'))
+    else callback()
+  }, trigger: 'change' }],
   startDate: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
+  endDate: [{ validator: (_rule, value, callback) => {
+    if (form.recurrenceType === 'WEEKLY' && !value) callback(new Error('请选择结束日期'))
+    else callback()
+  }, trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-  endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }],
+  endTime: [
+    { required: true, message: '请选择结束时间', trigger: 'change' },
+    { validator: (_rule, value, callback) => {
+      const error = scheduleTimeError(form.startTime, value)
+      callback(error ? new Error(error) : undefined)
+    }, trigger: 'change' }
+  ],
   consumeHours: [{ required: true, message: '请输入消耗课时', trigger: 'blur' }]
 }
+
+watch(() => form.startTime, () => {
+  if (showAddModal.value && form.endTime) {
+    formRef.value?.validateField('endTime').catch(() => {})
+  }
+})
 
 const tableRowClassName = ({ rowIndex }) => {
   if (rowIndex % 2 === 1) return 'row-stripe'
   return ''
 }
 
+let fetchRequestId = 0
 const fetchData = async () => {
+  const requestId = ++fetchRequestId
   try {
     const res = await getSchedules({ ...searchForm, ...pagination })
+    if (requestId !== fetchRequestId) return
     tableData.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
     pagination.total = typeof res?.total === 'number' ? res.total : tableData.value.length
   } catch (err) {
     console.error(err)
+    if (requestId !== fetchRequestId) return
     tableData.value = []
     pagination.total = 0
   }
@@ -172,8 +220,7 @@ const fetchData = async () => {
 
 const fetchCourses = async () => {
   try {
-    const res = await getCourses()
-    courses.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+    courses.value = await getAllCourses()
   } catch (err) {
     console.error(err)
     courses.value = []
@@ -182,13 +229,33 @@ const fetchCourses = async () => {
 
 const fetchTeachers = async () => {
   try {
-    const res = await getUsers({ pageNum: 1, pageSize: 100, role: 'TEACHER' })
-    const all = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
-    teachers.value = all.filter(u => u.role === 'TEACHER' || u.username === 'teacher' || !u.role)
+    const all = await getAllUsers({ role: 'TEACHER' })
+    teachers.value = all
+      .filter(u => u.role === 'TEACHER' && u.profileId)
+      .sort((a, b) => String(a.profileName || a.username || '').localeCompare(String(b.profileName || b.username || ''), 'zh-CN'))
   } catch (err) {
     console.error(err)
     teachers.value = []
   }
+}
+
+const fetchStudents = async () => {
+  try {
+    const list = await getAllStudents()
+    students.value = list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
+  } catch (err) {
+    console.error(err)
+    students.value = []
+  }
+}
+
+const getCourseName = (id) => courses.value.find(c => String(c.id) === String(id))?.courseName || `课程 #${id || '-'}`
+const getTeacherName = (id) => teachers.value.find(t => String(t.profileId) === String(id))?.profileName || `教师 #${id || '-'}`
+const assistantTeacherOptions = computed(() => teachers.value.filter(t => String(t.profileId) !== String(form.teacherId)))
+const getAssistantNames = row => [row.assistantTeacherId1, row.assistantTeacherId2]
+  .filter(Boolean).map(getTeacherName).join('、')
+const handlePrimaryTeacherChange = id => {
+  form.assistantTeacherIds = form.assistantTeacherIds.filter(assistantId => String(assistantId) !== String(id))
 }
 
 const handleSearch = () => { pagination.page = 1; fetchData() }
@@ -201,6 +268,8 @@ const resetForm = () => {
   form.seriesName = ''
   form.courseId = ''
   form.teacherId = ''
+  form.assistantTeacherIds = []
+  form.studentIds = []
   form.classGroupId = null
   form.recurrenceType = 'NONE'
   form.weekDays = []
@@ -232,13 +301,16 @@ const handleEdit = (row) => {
   form.recurrenceType = form.recurrenceType || (row.scheduleType === 'RECURRING' ? 'WEEKLY' : 'NONE')
   form.startDate = form.startDate || toPlainDate(row.startDate)
   form.endDate = form.endDate || toPlainDate(row.endDate)
+  form.weekDays = String(row.weekdays || row.weekDays || '')
+    .split(',').map(v => v.trim()).filter(Boolean)
+  form.assistantTeacherIds = [row.assistantTeacherId1, row.assistantTeacherId2].filter(Boolean)
   showAddModal.value = true
 }
 
 const handleDelete = async (row) => {
   const target = row?.seriesName || row?.scheduleName ? `排课 ${row.seriesName || row.scheduleName}` : '该排课'
   try {
-    await ElMessageBox.confirm(`确定删除${target}？删除后该系列所有课程实例将被一并移除，消课记录不会保留回滚。`, '删除确认', {
+    await ElMessageBox.confirm(`确定删除${target}？未完成课次会被取消，已完成记录会保留。`, '删除确认', {
       type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', distinguishCancelAndClose: true
     })
   } catch (_) { return }
@@ -253,35 +325,37 @@ const handleDelete = async (row) => {
 
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    try {
-      const payload = {
-        seriesName: form.seriesName,
-        courseId: Number(form.courseId) || 0,
-        teacherId: Number(form.teacherId) || 0,
-        classGroupId: form.classGroupId ? Number(form.classGroupId) : null,
-        recurrenceType: form.recurrenceType,
-        weekdays: Array.isArray(form.weekDays) && form.weekDays.length > 0 ? form.weekDays.join(',') : null,
-        startDate: form.startDate,
-        endDate: form.endDate || null,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        consumeHours: Number(form.consumeHours) || 0
-      }
-      if (isEdit.value) {
-        await updateSchedule(form.id, payload)
-        ElMessage.success('更新成功')
-      } else {
-        await createSchedule(payload)
-        ElMessage.success('创建成功')
-      }
-      showAddModal.value = false
-      fetchData()
-    } catch (err) {
-      ElMessage.error(err?.message || '操作失败')
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+  try {
+    const payload = {
+      seriesName: form.seriesName,
+      courseId: Number(form.courseId) || 0,
+      teacherId: Number(form.teacherId) || 0,
+      assistantTeacherId1: form.assistantTeacherIds[0] ? Number(form.assistantTeacherIds[0]) : null,
+      assistantTeacherId2: form.assistantTeacherIds[1] ? Number(form.assistantTeacherIds[1]) : null,
+      studentIds: form.studentIds.map(id => Number(id) || id),
+      classGroupId: form.classGroupId ? Number(form.classGroupId) : null,
+      recurrenceType: form.recurrenceType,
+      weekdays: Array.isArray(form.weekDays) && form.weekDays.length > 0 ? form.weekDays.join(',') : null,
+      startDate: form.startDate,
+      endDate: form.endDate || null,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      consumeHours: Number(form.consumeHours) || 0
     }
-  })
+    if (isEdit.value) {
+      await updateSchedule(form.id, payload)
+      ElMessage.success('更新成功')
+    } else {
+      await createSchedule(payload)
+      ElMessage.success('创建成功')
+    }
+    showAddModal.value = false
+    fetchData()
+  } catch (err) {
+    ElMessage.error(err?.message || '操作失败')
+  }
 }
 
 // 新增排课按钮绑定到 handleAdd
@@ -289,11 +363,18 @@ const handleSubmit = async () => {
 fetchData()
 fetchCourses()
 fetchTeachers()
+fetchStudents()
 </script>
 
 <style scoped>
 .page-container {
   padding: 0;
+}
+
+.assistant-text {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .page-header {

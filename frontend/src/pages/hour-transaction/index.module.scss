@@ -51,6 +51,42 @@
   }
 }
 
+.rechargeNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
+  padding: $spacing-lg;
+  background: #f0f7ff;
+
+  .rechargeNoticeContent {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rechargeNoticeTitle {
+    display: block;
+    margin-bottom: $spacing-xs;
+    color: $color-text-primary;
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+  }
+
+  .rechargeNoticeText {
+    display: block;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+    line-height: 1.5;
+  }
+
+  .rechargeNoticeAction {
+    flex-shrink: 0;
+    color: $color-primary;
+    font-size: $font-size-sm;
+  }
+}
+
 .section {
   .sectionTitle {
     display: block;
@@ -210,9 +246,11 @@
 
 .studentList {
   height: 50vh;
-  padding: 0 $spacing-lg;
+  padding: 0;
   
   .studentItem {
+    margin-left: $spacing-lg;
+    margin-right: $spacing-lg;
     display: flex;
     align-items: center;
     padding: $spacing-md 0;

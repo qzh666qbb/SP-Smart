@@ -8,7 +8,7 @@ export default function mockLogin(params: LoginParams): LoginResult {
     username: params.username,
     role: params.role,
     phone: '13800138000',
-    avatar: 'https://picsum.photos/id/64/200/200'
+    avatar: undefined
   };
   
   if (params.role === 'PARENT') {
@@ -28,7 +28,7 @@ export default function mockLogin(params: LoginParams): LoginResult {
       id: 'P001',
       userId: 'P001',
       name: '张家长',
-      avatar: 'https://picsum.photos/id/65/200/200',
+      avatar: undefined,
       phone: '13800138000',
       students: [mockStudent]
     };
@@ -44,7 +44,7 @@ export default function mockLogin(params: LoginParams): LoginResult {
     id: '1',
     userId: '1',
     name: '张老师',
-    avatar: 'https://picsum.photos/id/64/200/200',
+    avatar: undefined,
     school: '阳光体育学校',
     title: '高级教练'
   };

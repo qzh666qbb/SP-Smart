@@ -83,7 +83,8 @@ export const getAttendanceText = (status: string) => {
     PRESENT: '出勤',
     ABSENT: '缺勤',
     LATE: '迟到',
-    EXCUSED: '请假'
+    EXCUSED: '请假',
+    LEAVE: '请假'
   };
   return attendanceMap[status] || status;
 };

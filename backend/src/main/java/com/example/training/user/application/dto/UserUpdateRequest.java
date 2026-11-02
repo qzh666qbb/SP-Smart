@@ -11,6 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserUpdateRequest {
 
+    @Size(max = 64, message = "用户名不能超过64个字符")
+    private String username;
+
     @Pattern(regexp = "^(ADMIN|TEACHER|PARENT)$", message = "角色必须是ADMIN、TEACHER或PARENT")
     private String role;
 
@@ -22,6 +25,9 @@ public class UserUpdateRequest {
 
     @Pattern(regexp = "^(ENABLED|DISABLED)$", message = "状态必须是ENABLED或DISABLED")
     private String status;
+
+    @Size(max = 64, message = "教师姓名不能超过64个字符")
+    private String teacherName;
 
     private static String trimToNull(String s) {
         if (s == null) return null;
@@ -37,4 +43,8 @@ public class UserUpdateRequest {
     public void setPhone(String phone) { this.phone = trimToNull(phone); }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = trimToNull(status); }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = trimToNull(username); }
+    public String getTeacherName() { return teacherName; }
+    public void setTeacherName(String teacherName) { this.teacherName = trimToNull(teacherName); }
 }

@@ -121,6 +121,7 @@ class HourApplicationServiceTest {
             assertEquals(new BigDecimal("9"), account.getPaidHours());
             assertEquals(new BigDecimal("9"), account.getRemainingHours());
             assertEquals(new BigDecimal("5"), account.getTotalConsumed());
+            assertEquals("EXPERIENCE=1;ACTIVITY=1;GIFT=2;PAID=1", tx.getSourceBreakdown());
         }
 
         @Test
@@ -292,9 +293,27 @@ class HourApplicationServiceTest {
                     hourApplicationService.refund(request, currentUser));
 
             assertEquals(ErrorCode.HOUR_NEGATIVE_NOT_ALLOWED, ex.getErrorCode());
-            assertTrue(ex.getMessage().contains("不允许负余额"));
+            assertTrue(ex.getMessage().contains("付费课时不足"));
             verify(hourRepository, never()).saveAccount(any());
             verify(hourRepository, never()).saveTransaction(any());
+        }
+
+        @Test
+        @DisplayName("赠送课时不能用于减少付费课时")
+        void refund_PaidInsufficientWithGiftBalance_ThrowsException() {
+            StudentHourAccount account = buildAccount(1L,
+                    BigDecimal.ONE, new BigDecimal("10"), BigDecimal.ZERO, BigDecimal.ZERO, 0);
+            when(hourRepository.findAccountByStudentId(1L)).thenReturn(Optional.of(account));
+            HourRefundRequest request = HourRefundRequest.builder()
+                    .studentId(1L).amount(new BigDecimal("2")).build();
+
+            BusinessException ex = assertThrows(BusinessException.class, () ->
+                    hourApplicationService.refund(request, currentUser));
+
+            assertEquals(ErrorCode.HOUR_NEGATIVE_NOT_ALLOWED, ex.getErrorCode());
+            assertEquals(BigDecimal.ONE, account.getPaidHours());
+            assertEquals(new BigDecimal("10"), account.getGiftHours());
+            verify(hourRepository, never()).saveAccount(any());
         }
 
         @Test
@@ -354,6 +373,34 @@ class HourApplicationServiceTest {
                             && Long.valueOf(500L).equals(tx.getRelatedTransactionId())
             ));
             verify(hourRepository, times(2)).saveTransaction(any(HourTransaction.class));
+        }
+
+        @Test
+        @DisplayName("多来源消耗按原来源分别退回")
+        void refundByTransaction_MultiSource_RestoresEveryBucket() {
+            HourTransaction originalTx = HourTransaction.builder()
+                    .id(503L).studentId(1L).transactionType("CONSUME")
+                    .changeAmount(new BigDecimal("-3"))
+                    .hourSource("EXPERIENCE")
+                    .sourceBreakdown("EXPERIENCE=1;GIFT=1.5;PAID=0.5")
+                    .build();
+            StudentHourAccount account = buildAccount(1L,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0);
+            when(hourRepository.findTransactionById(503L)).thenReturn(Optional.of(originalTx));
+            when(hourRepository.findAccountByStudentId(1L)).thenReturn(Optional.of(account));
+            when(hourRepository.saveAccount(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(hourRepository.saveTransaction(any())).thenAnswer(inv -> {
+                HourTransaction transaction = inv.getArgument(0);
+                if (transaction.getId() == null) transaction.setId(504L);
+                return transaction;
+            });
+
+            hourApplicationService.refundByTransaction(503L, "取消课程", currentUser);
+
+            assertEquals(new BigDecimal("1"), account.getExperienceHours());
+            assertEquals(new BigDecimal("1.5"), account.getGiftHours());
+            assertEquals(new BigDecimal("0.5"), account.getPaidHours());
+            assertEquals(new BigDecimal("3.0"), account.getRemainingHours());
         }
 
         @Test

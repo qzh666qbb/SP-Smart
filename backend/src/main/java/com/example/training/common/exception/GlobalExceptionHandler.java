@@ -94,6 +94,13 @@ public class GlobalExceptionHandler {
                         ErrorCode.AUTH_FORBIDDEN.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.dao.DuplicateKeyException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateKey(org.springframework.dao.DuplicateKeyException e) {
+        log.warn("数据唯一键冲突", e);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ErrorCode.DUPLICATE_RESOURCE.getCode(), "账号、手机号或编号已存在，请检查后重试"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception e) {
         log.error("系统内部错误", e);

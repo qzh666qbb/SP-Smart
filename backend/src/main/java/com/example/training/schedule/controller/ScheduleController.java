@@ -37,8 +37,16 @@ public class ScheduleController {
     private final ParentPermissionService parentPermissionService;
     private final TeacherPermissionService teacherPermissionService;
     
+    private Long resolveCalendarTeacherId(CurrentUser currentUser) {
+        if ("ADMIN".equals(currentUser.getRole())) return null;
+        if (currentUser.getProfileId() == null) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "当前账号未关联教师资料，请联系管理员");
+        }
+        return currentUser.getProfileId();
+    }
+
     @PostMapping("/business/schedules")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ScheduleSeries> createScheduleSeries(
             @Valid @RequestBody ScheduleCreateRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
@@ -51,29 +59,33 @@ public class ScheduleController {
     public ApiResponse<PageResult<ScheduleSeries>> listSchedules(
             @AuthenticationPrincipal CurrentUser currentUser,
             PageRequest pageRequest,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        Long teacherId = "ADMIN".equals(currentUser.getRole()) ? null : currentUser.getProfileId();
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "date", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        Long teacherId = resolveCalendarTeacherId(currentUser);
         PageResult<ScheduleSeries> response = scheduleApplicationService.listSchedulesPage(
-                teacherId, keyword, pageRequest.getPageNum(), pageRequest.getPageSize());
+                teacherId, keyword, date, pageRequest.getPageNum(), pageRequest.getPageSize());
         return ApiResponse.success(response);
     }
     
     @GetMapping("/business/schedules/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<ScheduleSeries> getSchedule(@PathVariable Long id) {
-        ScheduleSeries response = scheduleApplicationService.getSchedule(id);
+    public ApiResponse<ScheduleSeries> getSchedule(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        ScheduleSeries response = scheduleApplicationService.getSchedule(id, currentUser);
         return ApiResponse.success(response);
     }
     
     @DeleteMapping("/business/schedules/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> deleteSchedule(@PathVariable Long id) {
         scheduleApplicationService.deleteSchedule(id);
         return ApiResponse.success();
     }
 
     @PutMapping("/business/schedules/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ScheduleSeries> updateSchedule(
             @PathVariable Long id,
             @Valid @RequestBody ScheduleCreateRequest request,
@@ -119,8 +131,12 @@ public class ScheduleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
     public ApiResponse<Void> parentRecordAttendance(
             @PathVariable Long lessonId,
-            @RequestBody AttendanceRequest request,
+            @Valid @RequestBody AttendanceRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
+        if (request.getLessonId() != null && !lessonId.equals(request.getLessonId())) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "路径课程ID与请求体不一致");
+        }
+        request.setLessonId(lessonId);
         if (!parentPermissionService.canAccessStudent(currentUser, request.getStudentId())) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "非本人子女，无权限操作");
         }
@@ -132,20 +148,52 @@ public class ScheduleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ApiResponse<List<Lesson>> getLessonsByTeacher(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @AuthenticationPrincipal CurrentUser currentUser) {
-        LocalDate d = date != null ? date : LocalDate.now();
-        Long teacherId = "ADMIN".equals(currentUser.getRole()) ? null : currentUser.getProfileId();
-        List<Lesson> response = scheduleApplicationService.getLessonsByTeacher(teacherId, d);
+        Long teacherId = resolveCalendarTeacherId(currentUser);
+        if (date != null) {
+            if (startDate != null || endDate != null) {
+                throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "date不能与日期范围同时使用");
+            }
+            return ApiResponse.success(scheduleApplicationService.getLessonsByTeacher(teacherId, date));
+        }
+        if ((startDate == null) != (endDate == null)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期和结束日期必须同时提供");
+        }
+        if (startDate == null) {
+            // 兼容未传日期的旧版日历客户端，返回当月完整的六周视图。
+            LocalDate firstDay = LocalDate.now().withDayOfMonth(1);
+            startDate = firstDay.minusDays(firstDay.getDayOfWeek().getValue() % 7);
+            endDate = startDate.plusDays(41);
+        } else if (startDate.isAfter(endDate)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期不能晚于结束日期");
+        }
+        List<Lesson> response = scheduleApplicationService.getLessonsByTeacher(teacherId, startDate, endDate);
         return ApiResponse.success(response);
     }
     
     @GetMapping("/business/lessons/{lessonId}/attendance")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    public ApiResponse<List<LessonStudent>> getLessonAttendance(@PathVariable Long lessonId) {
-        List<LessonStudent> response = scheduleApplicationService.getLessonAttendance(lessonId);
+    public ApiResponse<List<LessonStudent>> getLessonAttendance(
+            @PathVariable Long lessonId,
+            @AuthenticationPrincipal CurrentUser currentUser) {
+        List<LessonStudent> response = scheduleApplicationService.getLessonAttendance(lessonId, currentUser);
         return ApiResponse.success(response);
     }
     
+    @GetMapping("/parent/timetable")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PARENT')")
+    public ApiResponse<List<com.example.training.schedule.application.dto.PublicLessonResponse>> getPublicTimetable(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        if (startDate.isAfter(endDate) || java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) > 6) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "请选择不超过一周的日期范围");
+        }
+        return ApiResponse.success(scheduleApplicationService.getLessonsByTeacher(null, startDate, endDate)
+                .stream().map(com.example.training.schedule.application.dto.PublicLessonResponse::from).toList());
+    }
+
     @GetMapping("/parent/schedules")
     @PreAuthorize("hasAnyRole('ADMIN', 'PARENT', 'TEACHER')")
     public ApiResponse<List<Lesson>> getChildSchedules(
@@ -153,6 +201,9 @@ public class ScheduleController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @AuthenticationPrincipal CurrentUser currentUser) {
+        if (startDate.isAfter(endDate)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期不能晚于结束日期");
+        }
         if ("PARENT".equals(currentUser.getRole())
                 && !parentPermissionService.canAccessStudent(currentUser, studentId)) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "无权限查看该学员排课信息");
@@ -170,11 +221,19 @@ public class ScheduleController {
             @PathVariable Long lessonId,
             @RequestBody Map<String, Object> body,
             @AuthenticationPrincipal CurrentUser currentUser) {
+        if (body.get("studentId") == null || body.get("rating") == null) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "学员和评分不能为空");
+        }
         Long studentId = Long.valueOf(body.get("studentId").toString());
         if (!parentPermissionService.canAccessStudent(currentUser, studentId)) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED);
         }
-        BigDecimal rating = new BigDecimal(body.getOrDefault("rating", "0").toString());
+        BigDecimal rating;
+        try {
+            rating = new BigDecimal(body.get("rating").toString());
+        } catch (NumberFormatException ex) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "评分格式不正确");
+        }
         if (rating.compareTo(BigDecimal.ONE) < 0 || rating.compareTo(BigDecimal.valueOf(5)) > 0) {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "评分需1-5分");
         }

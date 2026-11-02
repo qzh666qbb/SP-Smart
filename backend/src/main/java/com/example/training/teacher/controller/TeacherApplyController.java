@@ -69,4 +69,13 @@ public class TeacherApplyController {
                 keyword, pageRequest.getPageNum(), pageRequest.getPageSize());
         return ApiResponse.success(resp);
     }
+
+    @PutMapping("/admin/teacher/pre-register/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Void> updatePreRegisterStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        teacherApplicationService.updatePreRegisterStatus(id, body == null ? null : body.get("status"));
+        return ApiResponse.success();
+    }
 }

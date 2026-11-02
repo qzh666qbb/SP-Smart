@@ -45,7 +45,12 @@ export default function CustomButton({
       className={`${styles.button} ${sizeMap[size]} ${typeMap[type]} ${blockClass} ${isDisabled ? styles.disabled : ''} ${loading ? styles.loading : ''} ${className || ''}`}
       disabled={isDisabled}
       onClick={onClick}
-      style={block ? { display: 'block', width: '100%' } : {}}
+      style={block ? {
+        display: 'flex',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+      } : {}}
     >
       {loading ? '加载中...' : children}
     </Button>

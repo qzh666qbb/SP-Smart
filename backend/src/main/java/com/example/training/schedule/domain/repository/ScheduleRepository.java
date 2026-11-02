@@ -26,10 +26,18 @@ public interface ScheduleRepository {
     Optional<Lesson> findByLessonNo(String lessonNo);
     
     List<Lesson> findByTeacherIdAndDate(Long teacherId, LocalDate date);
+
+    List<Lesson> findByTeacherIdAndDateRange(Long teacherId, LocalDate startDate, LocalDate endDate);
     
     List<Lesson> findByClassGroupIdAndDateRange(Long classGroupId, LocalDate startDate, LocalDate endDate);
     
     List<Lesson> findByStudentIdAndDateRange(Long studentId, LocalDate startDate, LocalDate endDate);
+
+    boolean existsLessonBySeriesIdAndDate(Long seriesId, LocalDate date);
+
+    List<Long> findStudentIdsByScheduleSeriesId(Long seriesId);
+
+    void replaceScheduleSeriesStudents(Long seriesId, List<Long> studentIds, Long createdBy);
     
     LessonStudent saveLessonStudent(LessonStudent lessonStudent);
     
@@ -40,6 +48,8 @@ public interface ScheduleRepository {
     List<LessonStudent> findByStudentId(Long studentId);
     
     void deleteScheduleSeries(Long id);
+
+    void softDeletePendingLessonsBySeries(Long seriesId, LocalDate fromDate);
 
     int markAbsentForCompletedLessons(LocalDateTime threshold);
 

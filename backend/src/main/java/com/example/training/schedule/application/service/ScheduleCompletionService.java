@@ -36,8 +36,10 @@ public class ScheduleCompletionService {
         Lesson lesson = scheduleRepository.findLessonById(lessonId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LESSON_NOT_FOUND));
 
-        if (lesson.isCompleted() || lesson.isCancelled()) {
-            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "课程已完成或已取消，不能重复完成");
+        assertCanManageLesson(lesson, currentUser);
+
+        if (!lesson.isInProgress()) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "只有进行中的课程可以结课");
         }
 
         lesson.setStatus("COMPLETED");
@@ -58,7 +60,7 @@ public class ScheduleCompletionService {
         List<LessonStudent> lessonStudents = scheduleRepository.findLessonStudentsByLessonId(lessonId);
 
         for (LessonStudent ls : lessonStudents) {
-            if ("PRESENT".equals(ls.getAttendanceStatus()) && !ls.getShouldConsume()) {
+            if (isChargeableAttendance(ls.getAttendanceStatus()) && !Boolean.TRUE.equals(ls.getShouldConsume())) {
                 BigDecimal consumeAmount = ls.getConsumeHours() != null
                         ? ls.getConsumeHours()
                         : lesson.getConsumeHours() != null
@@ -90,8 +92,13 @@ public class ScheduleCompletionService {
         Lesson lesson = scheduleRepository.findLessonById(lessonId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LESSON_NOT_FOUND));
 
+        assertCanManageLesson(lesson, currentUser);
+
         if (lesson.isCancelled()) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "课程已取消");
+        }
+        if (lesson.isCompleted() && !currentUser.isAdmin()) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "已完成课程只能由管理员取消并退回课时");
         }
 
         lesson.setStatus("CANCELLED");
@@ -111,11 +118,28 @@ public class ScheduleCompletionService {
         List<LessonStudent> lessonStudents = scheduleRepository.findLessonStudentsByLessonId(lessonId);
 
         for (LessonStudent ls : lessonStudents) {
-            if (ls.getShouldConsume() && ls.getHourTransactionId() != null) {
+            if (Boolean.TRUE.equals(ls.getShouldConsume()) && ls.getHourTransactionId() != null) {
                 hourApplicationService.refundByTransaction(
                         ls.getHourTransactionId(), "课程取消退回 - " + lesson.getLessonNo(), currentUser);
                 log.info("消课退回: studentId={}, lessonId={}", ls.getStudentId(), lessonId);
             }
         }
+    }
+
+    private void assertCanManageLesson(Lesson lesson, CurrentUser currentUser) {
+        if (currentUser == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        if (currentUser.isTeacher()
+                && (currentUser.getProfileId() == null
+                || !(currentUser.getProfileId().equals(lesson.getTeacherId())
+                || currentUser.getProfileId().equals(lesson.getAssistantTeacherId1())
+                || currentUser.getProfileId().equals(lesson.getAssistantTeacherId2())))) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "只能操作本人负责的课程");
+        }
+    }
+
+    private boolean isChargeableAttendance(String status) {
+        return "PRESENT".equals(status) || "LATE".equals(status);
     }
 }

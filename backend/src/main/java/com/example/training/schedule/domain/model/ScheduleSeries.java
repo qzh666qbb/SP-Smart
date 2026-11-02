@@ -21,6 +21,8 @@ public class ScheduleSeries {
     private Long courseId;
     private Long classGroupId;
     private Long teacherId;
+    private Long assistantTeacherId1;
+    private Long assistantTeacherId2;
     private String recurrenceType;
     private String weekdays;
     private LocalDate startDate;
@@ -51,6 +53,8 @@ public class ScheduleSeries {
     public Long getCourseId() { return courseId; }    public void setCourseId(Long courseId) { this.courseId = courseId; }
     public Long getClassGroupId() { return classGroupId; }    public void setClassGroupId(Long classGroupId) { this.classGroupId = classGroupId; }
     public Long getTeacherId() { return teacherId; }    public void setTeacherId(Long teacherId) { this.teacherId = teacherId; }
+    public Long getAssistantTeacherId1() { return assistantTeacherId1; }    public void setAssistantTeacherId1(Long assistantTeacherId1) { this.assistantTeacherId1 = assistantTeacherId1; }
+    public Long getAssistantTeacherId2() { return assistantTeacherId2; }    public void setAssistantTeacherId2(Long assistantTeacherId2) { this.assistantTeacherId2 = assistantTeacherId2; }
     public String getRecurrenceType() { return recurrenceType; }    public void setRecurrenceType(String recurrenceType) { this.recurrenceType = recurrenceType; }
     public String getWeekdays() { return weekdays; }    public void setWeekdays(String weekdays) { this.weekdays = weekdays; }
     public LocalDate getStartDate() { return startDate; }    public void setStartDate(LocalDate startDate) { this.startDate = startDate; }

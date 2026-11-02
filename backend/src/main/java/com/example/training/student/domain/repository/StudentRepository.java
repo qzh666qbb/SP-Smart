@@ -27,6 +27,8 @@ public interface StudentRepository {
     ParentStudentRelation saveRelation(ParentStudentRelation relation);
     
     Optional<ParentStudentRelation> findRelation(Long parentId, Long studentId);
+
+    Optional<ParentStudentRelation> findRelationById(Long relationId);
     
     List<ParentStudentRelation> findRelationsByParentId(Long parentId);
     

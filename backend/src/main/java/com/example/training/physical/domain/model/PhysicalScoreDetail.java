@@ -16,6 +16,8 @@ public class PhysicalScoreDetail {
     private Long id;
     private Long recordId;
     private Long itemId;
+    private String itemName;
+    private String unit;
     private BigDecimal rawValue;
     private BigDecimal convertedScore;
     private String level;
@@ -26,6 +28,8 @@ public class PhysicalScoreDetail {
     public Long getId() { return id; }    public void setId(Long id) { this.id = id; }
     public Long getRecordId() { return recordId; }    public void setRecordId(Long recordId) { this.recordId = recordId; }
     public Long getItemId() { return itemId; }    public void setItemId(Long itemId) { this.itemId = itemId; }
+    public String getItemName() { return itemName; }    public void setItemName(String itemName) { this.itemName = itemName; }
+    public String getUnit() { return unit; }    public void setUnit(String unit) { this.unit = unit; }
     public BigDecimal getRawValue() { return rawValue; }    public void setRawValue(BigDecimal rawValue) { this.rawValue = rawValue; }
     public BigDecimal getConvertedScore() { return convertedScore; }    public void setConvertedScore(BigDecimal convertedScore) { this.convertedScore = convertedScore; }
     public String getLevel() { return level; }    public void setLevel(String level) { this.level = level; }

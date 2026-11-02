@@ -90,3 +90,7 @@ logs/
 
 # Runtime data
 dump.rdb
+# Local verification artifacts and developer-specific settings
+/tmp/
+/output/
+/frontend/project.private.config.json

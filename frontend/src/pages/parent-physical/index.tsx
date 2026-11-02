@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import { PhysicalTestRecord, ParentProfile, Student } from '@/types';
@@ -8,6 +8,7 @@ import { formatDate } from '@/utils/format';
 import useAuthStore from '@/store/auth';
 import { notifyTabBarActive } from '@/utils/tabbar';
 import styles from './index.module.scss';
+import BottomNav from '@/components/BottomNav';
 
 export default function ParentPhysicalPage() {
   Taro.useDidShow(() => notifyTabBarActive('/pages/parent-physical/index'));
@@ -17,6 +18,7 @@ export default function ParentPhysicalPage() {
   const [selectedRecord, setSelectedRecord] = useState<PhysicalTestRecord | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const recordsRequestId = useRef(0);
   const { profile } = useAuthStore();
   const parentProfile = profile as ParentProfile;
 
@@ -32,29 +34,37 @@ export default function ParentPhysicalPage() {
 
   const fetchStudents = async () => {
     try {
-      const students = await getParentStudents();
-      setStudents(students || []);
-      if (students && students.length > 0) {
-        setSelectedStudent(students[0]);
+      const nextStudents = await getParentStudents();
+      setStudents(nextStudents || []);
+      if (nextStudents && nextStudents.length > 0) {
+        setSelectedStudent(nextStudents[0]);
+      } else {
+        recordsRequestId.current += 1;
+        setSelectedStudent(null);
+        setRecords([]);
+        setIsLoading(false);
       }
     } catch (err) {
       console.error('[ParentPhysicalPage]', err);
       if (parentProfile?.students && parentProfile.students.length > 0) {
         setStudents(parentProfile.students);
         setSelectedStudent(parentProfile.students[0]);
+      } else {
+        setIsLoading(false);
       }
     }
   };
 
   const fetchRecords = async (studentId: string) => {
+    const requestId = ++recordsRequestId.current;
     setIsLoading(true);
     try {
       const data = await getPhysicalTests({ studentId });
-      setRecords(data);
+      if (requestId === recordsRequestId.current) setRecords(data);
     } catch (err) {
       console.error('[ParentPhysicalPage]', err);
     } finally {
-      setIsLoading(false);
+      if (requestId === recordsRequestId.current) setIsLoading(false);
     }
   };
 
@@ -63,21 +73,31 @@ export default function ParentPhysicalPage() {
     setShowReportModal(true);
   };
 
-  const handleDownload = () => {
-    Taro.showToast({ title: '报告下载中', icon: 'loading' });
-    setTimeout(() => {
-      Taro.showToast({ title: '下载成功', icon: 'success' });
-    }, 1500);
+  const handleStudentChange = (e: any) => {
+    const student = students[Number(e.detail.value)];
+    if (student) {
+      setRecords([]);
+      setSelectedStudent(student);
+    }
   };
 
   return (
-    <ScrollView className={styles.physicalPage} scrollY>
+    <View className={styles.physicalPage}>
       {students.length > 0 && (
-        <Card className={styles.studentCard}>
-          <View className={styles.studentInfo}>
-            <Text className={styles.studentName}>{selectedStudent?.name || '孩子姓名'}</Text>
-            <Text className={styles.studentNo}>学号: {selectedStudent?.studentNo || '--'}</Text>
-          </View>
+        <Picker mode="selector" range={students.map((s) => s.name)} onChange={handleStudentChange}>
+          <Card className={styles.studentCard}>
+            <View className={styles.studentInfo}>
+              <Text className={styles.studentName}>{selectedStudent?.name || '孩子姓名'}</Text>
+              <Text className={styles.studentNo}>学号: {selectedStudent?.studentNo || '--'}</Text>
+            </View>
+            <Text className={styles.arrow}>›</Text>
+          </Card>
+        </Picker>
+      )}
+
+      {!isLoading && students.length === 0 && (
+        <Card className={styles.emptyCard} onClick={() => Taro.navigateTo({ url: '/pages/child-add-edit/index?isFirst=1' })}>
+          <Text className={styles.emptyText}>暂无孩子资料，点击添加</Text>
         </Card>
       )}
 
@@ -147,6 +167,7 @@ export default function ParentPhysicalPage() {
             </View>
 
             <ScrollView className={styles.modalBody} scrollY>
+              <View className={styles.modalBodyInner}>
               <View className={styles.reportSummary}>
                 <View className={styles.totalScoreCard}>
                   <Text className={styles.totalScore}>{selectedRecord.totalScore}</Text>
@@ -159,7 +180,7 @@ export default function ParentPhysicalPage() {
                 {(selectedRecord.scores || []).map((score, index) => (
                   <View key={index} className={styles.scoreItem}>
                     <Text className={styles.scoreName}>{score.itemName}</Text>
-                    <Text className={styles.scoreValue}>{score.score}</Text>
+                    <Text className={styles.scoreValue}>{score.score ?? '暂无数据'}</Text>
                     <Text className={styles.scoreUnit}>{score.unit}</Text>
                   </View>
                 ))}
@@ -169,20 +190,22 @@ export default function ParentPhysicalPage() {
                 <Text className={styles.reportSectionTitle}>评估结果</Text>
                 <View className={styles.evaluation}>
                   <Text className={styles.evaluationText}>
-                    {selectedRecord.evaluation || '身体状况良好，继续保持锻炼！'}
+                    {selectedRecord.evaluation || selectedRecord.remark || '暂无评估建议'}
                   </Text>
                 </View>
+              </View>
               </View>
             </ScrollView>
 
             <View className={styles.modalFooter}>
-              <Text className={styles.downloadBtn} onClick={handleDownload}>
-                下载报告
+              <Text className={styles.downloadBtn} onClick={() => setShowReportModal(false)}>
+                关闭
               </Text>
             </View>
           </View>
         </View>
       )}
-    </ScrollView>
+      <BottomNav />
+    </View>
   );
 }

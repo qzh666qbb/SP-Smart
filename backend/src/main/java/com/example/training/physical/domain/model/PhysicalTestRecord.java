@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Builder
 @NoArgsConstructor
@@ -20,6 +21,9 @@ public class PhysicalTestRecord {
     private Long studentId;
     private LocalDate testDate;
     private Long testerId;
+    private String teacherName;
+    private String studentName;
+    private List<PhysicalScoreDetail> details;
     private BigDecimal totalScore;
     private String overallLevel;
     private String status;
@@ -34,6 +38,9 @@ public class PhysicalTestRecord {
     public Long getStudentId() { return studentId; }    public void setStudentId(Long studentId) { this.studentId = studentId; }
     public LocalDate getTestDate() { return testDate; }    public void setTestDate(LocalDate testDate) { this.testDate = testDate; }
     public Long getTesterId() { return testerId; }    public void setTesterId(Long testerId) { this.testerId = testerId; }
+    public String getTeacherName() { return teacherName; }    public void setTeacherName(String teacherName) { this.teacherName = teacherName; }
+    public String getStudentName() { return studentName; }    public void setStudentName(String studentName) { this.studentName = studentName; }
+    public List<PhysicalScoreDetail> getDetails() { return details; }    public void setDetails(List<PhysicalScoreDetail> details) { this.details = details; }
     public BigDecimal getTotalScore() { return totalScore; }    public void setTotalScore(BigDecimal totalScore) { this.totalScore = totalScore; }
     public String getOverallLevel() { return overallLevel; }    public void setOverallLevel(String overallLevel) { this.overallLevel = overallLevel; }
     public String getStatus() { return status; }    public void setStatus(String status) { this.status = status; }

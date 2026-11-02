@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { View, Text } from '@tarojs/components';
 import Taro from '@tarojs/taro';
-import CustomButton from '@/components/Button';
 import Card from '@/components/Card';
+import CustomButton from '@/components/Button';
 import { listParentChildren } from '@/services/api';
 import { Student } from '@/types';
 import useAuthStore from '@/store/auth';
 import { notifyTabBarActive } from '@/utils/tabbar';
 import styles from './index.module.scss';
+import BottomNav from '@/components/BottomNav';
 
 function genderLabel(g?: 'MALE' | 'FEMALE' | 'UNKNOWN'): string {
   if (g === 'MALE') return '男';
@@ -27,15 +28,17 @@ export default function ParentChildrenPage() {
   const { token } = useAuthStore();
   const [list, setList] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const fetchChildren = useCallback(async () => {
     setIsLoading(true);
+    setLoadError('');
     try {
       const data = await listParentChildren();
       setList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('[ParentChildren.fetch]', err);
-      setList([]);
+      setLoadError('孩子资料加载失败，请检查登录状态后重试');
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +61,7 @@ export default function ParentChildrenPage() {
   }, [fetchChildren]);
 
   const goAddChild = () => {
-    Taro.navigateTo({ url: '/pages/child-add-edit/index' });
+    Taro.navigateTo({ url: `/pages/child-add-edit/index?isFirst=${list.length === 0 ? '1' : '0'}` });
   };
 
   const goDetail = (studentId: string) => {
@@ -88,7 +91,7 @@ export default function ParentChildrenPage() {
       <Text className={styles.emptyIcon}>🧒</Text>
       <Text className={styles.emptyTitle}>您还没有添加孩子资料</Text>
       <Text className={styles.emptyDesc}>
-        添加孩子后即可为 TA 充值课时、查看课程、查看体测档案
+        添加孩子后即可查看课时、课程和体测档案；充值请微信联系管理员
       </Text>
       <CustomButton type="primary" size="lg" block onClick={goAddChild}>
         立即添加孩子
@@ -101,18 +104,38 @@ export default function ParentChildrenPage() {
       <View className={styles.pageHeader}>
         <Text className={styles.pageTitle}>我的孩子</Text>
         <View className={styles.headerActions}>
+          <View className={styles.addChildButton} onClick={goAddChild}>
+            <Text className={styles.addChildIcon}>＋</Text>
+            <Text>添加孩子</Text>
+          </View>
           <Text className={styles.quickEntryBtn} onClick={goGlobalHoursEntry}>
             课时账户 / 流水
           </Text>
         </View>
       </View>
 
-      <ScrollView className={styles.scrollArea} scrollY>
+      <View className={styles.scrollArea}>
         <View className={styles.container}>
-          {!isLoading && list.length === 0 ? (
+          {isLoading && list.length === 0 ? (
+            <View className={styles.emptyState}>
+              <Text className={styles.emptyTitle}>正在加载孩子资料...</Text>
+            </View>
+          ) : loadError && list.length === 0 ? (
+            <View className={styles.emptyState}>
+              <Text className={styles.emptyTitle}>{loadError}</Text>
+              <CustomButton type="secondary" size="md" onClick={fetchChildren}>重新加载</CustomButton>
+            </View>
+          ) : list.length === 0 ? (
             renderEmpty()
           ) : (
-            list.map((s) => (
+            <>
+              {loadError && (
+                <View className={styles.emptyState}>
+                  <Text className={styles.emptyDesc}>{loadError}</Text>
+                  <CustomButton type="secondary" size="sm" onClick={fetchChildren}>重新加载</CustomButton>
+                </View>
+              )}
+              {list.map((s) => (
               <Card
                 key={s.id || String(s.name || Math.random())}
                 className={styles.childCard}
@@ -155,16 +178,14 @@ export default function ParentChildrenPage() {
                   <Text className={styles.arrowRight}>›</Text>
                 </View>
               </Card>
-            ))
+              ))}
+            </>
           )}
         </View>
-      </ScrollView>
+      </View>
 
-      {list.length > 0 && (
-        <View className={styles.fabAdd} onClick={goAddChild}>
-          <Text className={styles.fabIcon}>+</Text>
-        </View>
-      )}
+      <BottomNav />
+
     </View>
   );
 }

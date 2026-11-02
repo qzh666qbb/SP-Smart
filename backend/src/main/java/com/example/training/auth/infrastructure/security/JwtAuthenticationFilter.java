@@ -1,6 +1,8 @@
 package com.example.training.auth.infrastructure.security;
 
 import com.example.training.auth.domain.service.JwtService;
+import com.example.training.auth.domain.model.User;
+import com.example.training.auth.domain.repository.UserRepository;
 import com.example.training.common.security.CurrentUser;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     
     private final JwtService jwtService;
+    private final UserRepository userRepository;
     
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, 
@@ -36,14 +39,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = extractJwtFromRequest(request);
             
-            if (StringUtils.hasText(jwt) && !jwtService.isTokenExpired(jwt)) {
+            if (StringUtils.hasText(jwt) && !jwtService.isTokenExpired(jwt) && jwtService.isAccessToken(jwt)) {
                 Long userId = jwtService.extractUserId(jwt);
                 String username = jwtService.extractUsername(jwt);
                 String role = jwtService.extractRole(jwt);
+                User databaseUser = userRepository.findById(userId).orElse(null);
+                if (databaseUser == null || !databaseUser.isEnabled() || !role.equals(databaseUser.getRole())) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 
                 String phone = jwtService.extractPhone(jwt);
                 Long profileId = jwtService.extractProfileId(jwt);
                 String profileType = jwtService.extractProfileType(jwt);
+                if ("TEACHER".equals(role)) {
+                    profileId = userRepository.findTeacherProfileByUserId(userId)
+                            .map(com.example.training.auth.domain.model.TeacherProfile::getId).orElse(null);
+                    profileType = "TEACHER";
+                }
 
                 CurrentUser currentUser = CurrentUser.builder()
                         .userId(userId)

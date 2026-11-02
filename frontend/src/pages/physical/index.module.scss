@@ -52,6 +52,25 @@
 .importCard {
   margin-bottom: $spacing-lg;
   padding: $spacing-lg;
+
+  > button {
+    margin-top: $spacing-lg;
+  }
+
+  > .importInfo {
+    .importTitle {
+      display: block;
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+    }
+
+    .importDesc {
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+    }
+  }
   
   .importHeader {
     display: flex;
@@ -432,8 +451,12 @@
 
 .reportBody {
   flex: 1;
-  padding: $spacing-lg;
+  padding: 0;
   max-height: 50vh;
+}
+
+.reportBodyInner {
+  padding: $spacing-lg;
 }
 
 .reportSummary {

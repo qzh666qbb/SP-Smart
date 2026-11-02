@@ -31,7 +31,7 @@ public class HourController {
     private final TeacherPermissionService teacherPermissionService;
 
     @GetMapping("/business/hours/accounts")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<PageResult<HourAccountResponse>> listAccounts(
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int pageNum,
@@ -63,7 +63,7 @@ public class HourController {
     public ApiResponse<StudentHourAccount> adjust(
             @Valid @RequestBody HourRechargeRequest request,
             @AuthenticationPrincipal CurrentUser currentUser) {
-        StudentHourAccount response = hourApplicationService.recharge(request, currentUser);
+        StudentHourAccount response = hourApplicationService.adjust(request, currentUser);
         return ApiResponse.success(response);
     }
     

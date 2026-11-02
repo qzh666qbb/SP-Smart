@@ -75,6 +75,18 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public Optional<User> findByWechatUnionid(String unionid) {
+        if (unionid == null || unionid.isBlank()) return Optional.empty();
+        SysUserEntity entity = sysUserMapper.selectOne(
+                new LambdaQueryWrapper<SysUserEntity>()
+                        .eq(SysUserEntity::getWechatUnionid, unionid)
+                        .isNull(SysUserEntity::getDeletedAt)
+                        .last("LIMIT 1")
+        );
+        return Optional.ofNullable(entity).map(this::convertToDomain);
+    }
+
+    @Override
     public List<User> findAll(int pageNum, int pageSize) {
         return findAll(null, null, pageNum, pageSize);
     }
@@ -138,6 +150,16 @@ public class UserRepositoryImpl implements UserRepository {
         );
         return Optional.ofNullable(entity).map(this::convertToDomain);
     }
+
+    @Override
+    public Optional<TeacherProfile> findTeacherProfileById(Long profileId) {
+        TeacherProfileEntity entity = teacherProfileMapper.selectOne(
+                new LambdaQueryWrapper<TeacherProfileEntity>()
+                        .eq(TeacherProfileEntity::getId, profileId)
+                        .isNull(TeacherProfileEntity::getDeletedAt)
+        );
+        return Optional.ofNullable(entity).map(this::convertToDomain);
+    }
     
     @Override
     public ParentProfile saveParentProfile(ParentProfile profile) {
@@ -167,11 +189,14 @@ public class UserRepositoryImpl implements UserRepository {
                 .passwordHash(user.getPasswordHash())
                 .role(user.getRole())
                 .phone(user.getPhone())
+                .nickname(user.getNickname())
+                .avatarUrl(user.getAvatarUrl())
                 .wechatOpenid(user.getWechatOpenid())
                 .wechatUnionid(user.getWechatUnionid())
                 .status(user.getStatus())
                 .lastLoginAt(user.getLastLoginAt())
                 .passwordUpdatedAt(user.getPasswordUpdatedAt())
+                .tokenVersion(user.getTokenVersion())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .deletedAt(user.getDeletedAt())
@@ -185,11 +210,14 @@ public class UserRepositoryImpl implements UserRepository {
                 .passwordHash(entity.getPasswordHash())
                 .role(entity.getRole())
                 .phone(entity.getPhone())
+                .nickname(entity.getNickname())
+                .avatarUrl(entity.getAvatarUrl())
                 .wechatOpenid(entity.getWechatOpenid())
                 .wechatUnionid(entity.getWechatUnionid())
                 .status(entity.getStatus())
                 .lastLoginAt(entity.getLastLoginAt())
                 .passwordUpdatedAt(entity.getPasswordUpdatedAt())
+                .tokenVersion(entity.getTokenVersion())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .deletedAt(entity.getDeletedAt())

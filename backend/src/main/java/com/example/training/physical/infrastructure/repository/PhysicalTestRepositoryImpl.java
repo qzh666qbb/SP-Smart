@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.training.physical.domain.model.PhysicalScoreDetail;
 import com.example.training.physical.domain.model.PhysicalScoreStandard;
 import com.example.training.physical.domain.model.PhysicalTestItem;
+import com.example.training.physical.domain.model.PhysicalTestBatch;
 import com.example.training.physical.domain.model.PhysicalTestRecord;
 import com.example.training.physical.domain.repository.PhysicalTestRepository;
 import com.example.training.physical.infrastructure.persistence.PhysicalScoreDetailEntity;
@@ -12,6 +13,8 @@ import com.example.training.physical.infrastructure.persistence.PhysicalScoreSta
 import com.example.training.physical.infrastructure.persistence.PhysicalScoreStandardMapper;
 import com.example.training.physical.infrastructure.persistence.PhysicalTestItemEntity;
 import com.example.training.physical.infrastructure.persistence.PhysicalTestItemMapper;
+import com.example.training.physical.infrastructure.persistence.PhysicalTestBatchEntity;
+import com.example.training.physical.infrastructure.persistence.PhysicalTestBatchMapper;
 import com.example.training.physical.infrastructure.persistence.PhysicalTestRecordEntity;
 import com.example.training.physical.infrastructure.persistence.PhysicalTestRecordMapper;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,53 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
     private final PhysicalScoreDetailMapper detailMapper;
     private final PhysicalScoreStandardMapper standardMapper;
     private final PhysicalTestItemMapper physicalTestItemMapper;
+    private final PhysicalTestBatchMapper batchMapper;
+
+    @Override
+    public PhysicalTestBatch saveBatch(PhysicalTestBatch batch) {
+        PhysicalTestBatchEntity entity = new PhysicalTestBatchEntity();
+        entity.setId(batch.getId());
+        entity.setBatchName(batch.getBatchName());
+        entity.setBatchCode(batch.getBatchCode());
+        entity.setTemplateId(batch.getTemplateId());
+        entity.setTestDate(batch.getTestDate());
+        entity.setLocation(batch.getLocation());
+        entity.setStatus(batch.getStatus());
+        entity.setCreatedBy(batch.getCreatedBy());
+        entity.setUpdatedBy(batch.getCreatedBy());
+        if (entity.getId() == null) batchMapper.insert(entity); else batchMapper.updateById(entity);
+        batch.setId(entity.getId());
+        batch.setCreatedAt(entity.getCreatedAt());
+        return batch;
+    }
+
+    @Override
+    public Optional<PhysicalTestBatch> findBatchById(Long id) {
+        return Optional.ofNullable(batchMapper.selectOne(new QueryWrapper<PhysicalTestBatchEntity>()
+                        .eq("id", id).isNull("deleted_at")))
+                .map(this::toBatchModel);
+    }
+
+    @Override
+    public List<PhysicalTestBatch> findAvailableBatches() {
+        return batchMapper.selectList(new QueryWrapper<PhysicalTestBatchEntity>()
+                        .in("status", "PENDING", "IN_PROGRESS")
+                        .isNull("deleted_at")
+                        .orderByDesc("test_date").orderByDesc("id"))
+                .stream().map(this::toBatchModel).toList();
+    }
+
+    @Override
+    public Long findDefaultTemplateId() {
+        return batchMapper.findDefaultTemplateId();
+    }
+
+    private PhysicalTestBatch toBatchModel(PhysicalTestBatchEntity entity) {
+        return PhysicalTestBatch.builder().id(entity.getId()).batchName(entity.getBatchName())
+                .batchCode(entity.getBatchCode()).templateId(entity.getTemplateId())
+                .testDate(entity.getTestDate()).location(entity.getLocation()).status(entity.getStatus())
+                .createdBy(entity.getCreatedBy()).createdAt(entity.getCreatedAt()).build();
+    }
 
     @Override
     public PhysicalScoreStandard saveScoreStandard(PhysicalScoreStandard standard) {
@@ -70,14 +120,19 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
 
     @Override
     public Optional<PhysicalTestRecord> findRecordById(Long id) {
-        return Optional.ofNullable(recordMapper.selectById(id)).map(this::toRecordModel);
+        return Optional.ofNullable(recordMapper.selectOne(
+                new QueryWrapper<PhysicalTestRecordEntity>()
+                        .eq("id", id)
+                        .isNull("deleted_at")))
+                .map(this::toRecordModel);
     }
 
     @Override
     public Optional<PhysicalTestRecord> findRecordByNo(String recordNo) {
         return Optional.ofNullable(recordMapper.selectOne(
                 new QueryWrapper<PhysicalTestRecordEntity>()
-                        .eq("record_no", recordNo)))
+                        .eq("record_no", recordNo)
+                        .isNull("deleted_at")))
                 .map(this::toRecordModel);
     }
 
@@ -86,7 +141,9 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
         return recordMapper.selectList(
                 new QueryWrapper<PhysicalTestRecordEntity>()
                         .eq("student_id", studentId)
-                        .orderByDesc("test_date"))
+                        .isNull("deleted_at")
+                        .orderByDesc("test_date")
+                        .orderByDesc("id"))
                 .stream().map(this::toRecordModel).toList();
     }
 
@@ -94,7 +151,8 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
     public List<PhysicalTestRecord> findByBatchId(Long batchId) {
         return recordMapper.selectList(
                 new QueryWrapper<PhysicalTestRecordEntity>()
-                        .eq("batch_id", batchId))
+                        .eq("batch_id", batchId)
+                        .isNull("deleted_at"))
                 .stream().map(this::toRecordModel).toList();
     }
 
@@ -127,6 +185,9 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
     public List<PhysicalTestRecord> findByTesterId(Long testerId) {
         QueryWrapper<PhysicalTestRecordEntity> wrapper = new QueryWrapper<>();
         if (testerId != null) wrapper.eq("tester_id", testerId);
+        wrapper.isNull("deleted_at")
+                .orderByDesc("test_date")
+                .orderByDesc("id");
         return recordMapper.selectList(wrapper)
                 .stream().map(this::toRecordModel).toList();
     }
@@ -136,6 +197,7 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
         return Optional.ofNullable(recordMapper.selectOne(
                 new QueryWrapper<PhysicalTestRecordEntity>()
                         .eq("student_id", studentId)
+                        .isNull("deleted_at")
                         .orderByDesc("test_date")
                         .last("LIMIT 1")))
                 .map(this::toRecordModel);
@@ -214,6 +276,7 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
         e.setRemark(model.getRemark());
         e.setCreatedAt(model.getCreatedAt());
         e.setUpdatedAt(model.getUpdatedAt());
+        e.setDeletedAt(model.getDeletedAt());
         return e;
     }
 
@@ -231,6 +294,7 @@ public class PhysicalTestRepositoryImpl implements PhysicalTestRepository {
                 .remark(e.getRemark())
                 .createdAt(e.getCreatedAt())
                 .updatedAt(e.getUpdatedAt())
+                .deletedAt(e.getDeletedAt())
                 .build();
     }
 

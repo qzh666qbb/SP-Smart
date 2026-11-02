@@ -217,6 +217,17 @@ public class TeacherApplicationService {
         return PageResult.of(records, total, pageNum, pageSize);
     }
 
+    @Transactional
+    public void updatePreRegisterStatus(Long id, String status) {
+        if (!"ACTIVE".equals(status) && !"INACTIVE".equals(status)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "状态必须是ACTIVE或INACTIVE");
+        }
+        TeacherPreRegister preRegister = teacherRepository.findPreRegisterById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TEACHER_PHONE_NOT_PRE_REGISTERED, "预登记记录不存在"));
+        preRegister.setStatus(status);
+        teacherRepository.savePreRegister(preRegister);
+    }
+
     private Map<String, Object> convertApplyToMap(TeacherApply a) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", a.getId());

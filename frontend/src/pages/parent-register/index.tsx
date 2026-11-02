@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { View, Text, Input, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import CustomButton from '@/components/Button';
+import AgreementConsent from '@/components/AgreementConsent';
 import { registerParent } from '@/services/api';
 import useAuthStore from '@/store/auth';
+import appLogo from '@/assets/tabbar/physical-selected.png';
 import styles from './index.module.scss';
 
 type Relation = 'FATHER' | 'MOTHER' | 'GUARDIAN' | 'OTHER';
@@ -24,6 +26,7 @@ export default function ParentRegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
 
   const { login: handleLogin } = useAuthStore();
 
@@ -34,6 +37,10 @@ export default function ParentRegisterPage() {
   };
 
   const validate = (): boolean => {
+    if (!agreementAccepted) {
+      Taro.showToast({ title: '请先阅读并同意用户服务协议和隐私政策', icon: 'none' });
+      return false;
+    }
     if (!phone.trim()) {
       Taro.showToast({ title: '请输入手机号', icon: 'none' });
       return false;
@@ -69,7 +76,7 @@ export default function ParentRegisterPage() {
         realName: realName.trim(),
         defaultRelation,
       });
-      handleLogin(result.token, result.user, result.profile);
+      handleLogin(result.token, result.user, result.profile, result.refreshToken);
       Taro.showToast({ title: '注册并登录成功', icon: 'success' });
       setTimeout(() => {
         Taro.reLaunch({ url: '/pages/parent-children/index' });
@@ -88,7 +95,7 @@ export default function ParentRegisterPage() {
       <View className={styles.logoArea}>
         <Image
           className={styles.logo}
-          src="https://picsum.photos/id/119/200/200"
+          src={appLogo}
           mode="aspectFill"
         />
         <Text className={styles.title}>家长注册</Text>
@@ -163,11 +170,14 @@ export default function ParentRegisterPage() {
           size="lg"
           block
           loading={isSubmitting}
+          disabled={!agreementAccepted}
           onClick={handleSubmit}
           className={styles.submitBtn}
         >
           立即注册并登录
         </CustomButton>
+
+        <AgreementConsent checked={agreementAccepted} onChange={setAgreementAccepted} />
 
         <View className={styles.haveAccountRow}>
           <Text className={styles.link} onClick={handleGoLogin}>

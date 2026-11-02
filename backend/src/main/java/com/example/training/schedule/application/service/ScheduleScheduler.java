@@ -20,6 +20,12 @@ public class ScheduleScheduler {
 
 
     private final ScheduleRepository scheduleRepository;
+    private final ScheduleApplicationService scheduleApplicationService;
+
+    @Scheduled(fixedRate = 300000)
+    public void backfillMissingLessons() {
+        scheduleApplicationService.backfillMissingLessons();
+    }
 
     @Scheduled(fixedRate = 300000)
     public void markAbsentStudents() {

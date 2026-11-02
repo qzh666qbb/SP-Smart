@@ -35,6 +35,8 @@ public class PhysicalTestRecordEntity {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 
+    private LocalDateTime deletedAt;
+
     public Long getId() { return id; }    public void setId(Long id) { this.id = id; }
     public String getRecordNo() { return recordNo; }    public void setRecordNo(String recordNo) { this.recordNo = recordNo; }
     public Long getBatchId() { return batchId; }    public void setBatchId(Long batchId) { this.batchId = batchId; }
@@ -47,4 +49,5 @@ public class PhysicalTestRecordEntity {
     public String getRemark() { return remark; }    public void setRemark(String remark) { this.remark = remark; }
     public LocalDateTime getCreatedAt() { return createdAt; }    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public LocalDateTime getDeletedAt() { return deletedAt; }    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
 }

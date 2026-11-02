@@ -2,18 +2,18 @@
   <div class="page-container">
     <div class="page-header">
       <div class="page-title-group">
-        <h2>用户管理</h2>
-        <p class="page-desc">管理系统用户账号，包括管理员、教师和家长</p>
+        <h2>用户与教师管理</h2>
+        <p class="page-desc">新增教师后，手机号即登录账号，初始密码默认为 123456</p>
       </div>
       <el-button type="primary" class="btn-primary" @click="handleAdd">
         <el-icon><el-icon-plus /></el-icon>
-        新增用户
+        新增用户/教师
       </el-button>
     </div>
     
     <div class="page-card">
       <div class="search-bar">
-        <el-input v-model="searchForm.keyword" placeholder="搜索用户名" class="search-input" @keyup.enter="handleSearch" />
+        <el-input v-model="searchForm.keyword" placeholder="搜索用户名/手机号" class="search-input" @keyup.enter="handleSearch" />
         <el-select v-model="searchForm.role" placeholder="角色" class="search-select">
           <el-option label="全部" value="" />
           <el-option label="管理员" value="ADMIN" />
@@ -28,6 +28,9 @@
         <el-table-column prop="id" label="ID" width="50" />
         <el-table-column prop="username" label="用户名" min-width="100" />
         <el-table-column prop="phone" label="手机号" width="130" />
+        <el-table-column prop="profileName" label="姓名" min-width="100">
+          <template #default="{ row }">{{ row.profileName || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="role" label="角色" width="100">
           <template #default="{ row }">
             <el-tag :type="getRoleType(row.role)" class="role-tag">{{ getRoleText(row.role) }}</el-tag>
@@ -59,17 +62,8 @@
       </div>
     </div>
 
-    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑用户' : '新增用户'" width="420px" class="custom-dialog">
+    <el-dialog v-model="showAddModal" :title="isEdit ? '编辑用户/教师' : '新增用户/教师'" width="420px" class="custom-dialog">
       <el-form :model="form" :rules="rules" ref="formRef" class="modal-form">
-        <el-form-item prop="username" label="用户名">
-          <el-input v-model="form.username" placeholder="请输入用户名" />
-        </el-form-item>
-        <el-form-item prop="password" label="密码">
-          <el-input v-model="form.password" type="password" :placeholder="isEdit ? '不填则保持不变' : '请输入密码'" />
-        </el-form-item>
-        <el-form-item prop="phone" label="手机号">
-          <el-input v-model="form.phone" placeholder="请输入手机号" />
-        </el-form-item>
         <el-form-item prop="role" label="角色">
           <el-select v-model="form.role" placeholder="请选择角色">
             <el-option label="管理员" value="ADMIN" />
@@ -77,6 +71,23 @@
             <el-option label="家长" value="PARENT" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="form.role === 'TEACHER'" prop="teacherName" label="教师姓名">
+          <el-input v-model="form.teacherName" placeholder="请输入教师真实姓名" />
+        </el-form-item>
+        <el-form-item v-else prop="username" label="用户名">
+          <el-input v-model="form.username" placeholder="请输入用户名" />
+        </el-form-item>
+        <el-form-item prop="password" label="密码">
+          <el-input
+            v-model="form.password"
+            type="password"
+            :placeholder="isEdit ? '不填则保持不变' : (form.role === 'TEACHER' ? '不填则默认为 123456' : '请输入密码')"
+          />
+        </el-form-item>
+        <el-form-item prop="phone" label="手机号">
+          <el-input v-model="form.phone" :placeholder="form.role === 'TEACHER' ? '手机号将作为登录账号' : '请输入手机号'" />
+        </el-form-item>
+        <div v-if="form.role === 'TEACHER'" class="teacher-tip">教师创建后，可直接使用手机号和初始密码登录小程序。</div>
       </el-form>
       <template #footer>
         <el-button @click="showAddModal = false">取消</el-button>
@@ -115,6 +126,7 @@ const form = reactive({
   username: '',
   password: '',
   phone: '',
+  teacherName: '',
   role: 'TEACHER',
   status: 'ENABLED'
 })
@@ -124,9 +136,16 @@ const resetPwdTarget = reactive({ id: '', username: '' })
 const resetPwdForm = reactive({ newPassword: '' })
 
 const rules = computed(() => ({
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: !isEdit.value || (form.password && form.password.length > 0), message: '请输入密码', trigger: 'blur' }, { min: 6, message: '密码至少 6 位', trigger: 'blur' }],
-  phone: [{ pattern: /^(1[3-9]\d{9})?$/, message: '手机号格式不正确（留空或 11 位有效手机号）', trigger: 'blur' }],
+  username: [{ required: form.role !== 'TEACHER', message: '请输入用户名', trigger: 'blur' }],
+  teacherName: [{ required: form.role === 'TEACHER', message: '请输入教师姓名', trigger: 'blur' }],
+  password: [
+    { required: !isEdit.value && form.role !== 'TEACHER', message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码至少 6 位', trigger: 'blur' }
+  ],
+  phone: [
+    { required: form.role === 'TEACHER', message: '请输入教师手机号', trigger: 'blur' },
+    { pattern: /^(1[3-9]\d{9})?$/, message: '手机号格式不正确（留空或 11 位有效手机号）', trigger: 'blur' }
+  ],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }]
 }))
 
@@ -187,6 +206,7 @@ const handleAdd = () => {
   form.username = ''
   form.password = ''
   form.phone = ''
+  form.teacherName = ''
   form.role = 'TEACHER'
   form.status = 'ENABLED'
   showAddModal.value = true
@@ -197,6 +217,7 @@ const handleEdit = (row) => {
   form.id = row.id
   form.username = row.username
   form.phone = row.phone || ''
+  form.teacherName = row.profileName || ''
   form.role = row.role
   form.password = ''
   form.status = row.status || 'ENABLED'
@@ -485,5 +506,12 @@ fetchData()
 .modal-form :deep(.el-select__wrapper) {
   border-radius: 6px;
   border-color: #e5e7eb;
+}
+
+.teacher-tip {
+  margin: -8px 0 18px 90px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
 }
 </style>

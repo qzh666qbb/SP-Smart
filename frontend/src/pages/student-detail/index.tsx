@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { View, Text } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import Card from '@/components/Card';
 import Tag from '@/components/Tag';
@@ -36,10 +36,15 @@ export default function StudentDetailPage() {
   const fetchData = async (sid: string) => {
     setIsLoading(true);
     try {
+      const now = new Date();
       const [stu, recs, lsns] = await Promise.all([
         getStudentById(sid).catch(() => null as any),
         getPhysicalTests({ studentId: sid }).catch(() => [] as any),
-        getLessons({ studentId: sid }).catch(() => [] as any),
+        getLessons({
+          studentId: sid,
+          startDate: `${now.getFullYear() - 1}-01-01`,
+          endDate: `${now.getFullYear() + 1}-12-31`,
+        }).catch(() => [] as any),
       ]);
       if (stu) setStudent(stu);
       setRecords(recs || []);
@@ -54,13 +59,6 @@ export default function StudentDetailPage() {
 
   const handleRecordClick = (record: PhysicalTestRecord) => {
     setSelectedRecord(record);
-  };
-
-  const handleDownloadReport = () => {
-    Taro.showToast({ title: '正在下载报告...', icon: 'loading' });
-    setTimeout(() => {
-      Taro.showToast({ title: '报告下载成功', icon: 'success' });
-    }, 1500);
   };
 
   const getLevelTag = (level: string) => {
@@ -98,7 +96,7 @@ export default function StudentDetailPage() {
   }
 
   return (
-    <ScrollView className={styles.detailPage} scrollY>
+    <View className={styles.detailPage}>
       <Card className={styles.infoCard}>
         <View className={styles.header}>
           <View className={styles.avatar}>
@@ -181,7 +179,7 @@ export default function StudentDetailPage() {
               <Card key={course.id} className={styles.courseCard}>
                 <View className={styles.courseHeader}>
                   <View className={styles.courseInfo}>
-                    <Text className={styles.courseName}>体育课</Text>
+                    <Text className={styles.courseName}>{course.courseName || `课程 #${course.courseId}`}</Text>
                     <Text className={styles.courseDate}>{formatDate(course.lessonDate)} {course.startTime} - {course.endTime}</Text>
                   </View>
                   {getStatusTag(course.status)}
@@ -238,11 +236,11 @@ export default function StudentDetailPage() {
               </View>
             </View>
             <View className={styles.modalFooter}>
-              <CustomButton type="primary" onClick={handleDownloadReport}>下载报告</CustomButton>
+              <CustomButton type="primary" onClick={() => setSelectedRecord(null)}>关闭报告</CustomButton>
             </View>
           </View>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
