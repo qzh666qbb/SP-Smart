@@ -20,6 +20,7 @@ public class ScheduleSeries {
     private String seriesName;
     private Long courseId;
     private Long classGroupId;
+    private java.util.List<Long> studentIds;
     private Long teacherId;
     private Long assistantTeacherId1;
     private Long assistantTeacherId2;

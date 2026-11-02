@@ -197,6 +197,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
         List<Long> persistedIds = jdbcTemplate.queryForList(
                 "SELECT student_id FROM schedule_series_student WHERE schedule_series_id = ?",
                 Long.class, seriesId);
+        // 系列名单是当前配置；历史已上课名单不能重新加入已移除的学员。
+        if (!persistedIds.isEmpty()) return persistedIds;
         List<Long> lessonIds = lessonMapper.selectList(
                         new LambdaQueryWrapper<LessonEntity>()
                                 .eq(LessonEntity::getScheduleSeriesId, seriesId)

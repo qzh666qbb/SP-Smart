@@ -461,6 +461,10 @@ public class ScheduleApplicationService {
                 throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "只能查看本人负责的排课");
             }
         }
+        List<Long> classStudentIds = series.getClassGroupId() == null
+                ? java.util.Collections.emptyList()
+                : courseRepository.findStudentIdsByClassGroupId(series.getClassGroupId());
+        series.setStudentIds(mergeStudentIds(scheduleRepository.findStudentIdsByScheduleSeriesId(id), classStudentIds));
         return series;
     }
     

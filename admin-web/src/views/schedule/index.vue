@@ -86,7 +86,7 @@
             <el-option v-for="u in assistantTeacherOptions" :key="u.profileId" :label="u.profileName || u.username" :value="u.profileId" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="!isEdit" prop="studentIds" label="上课学员">
+        <el-form-item prop="studentIds" label="上课学员">
           <el-select v-model="form.studentIds" multiple filterable collapse-tags placeholder="请选择学员" style="width: 100%">
             <el-option v-for="s in students" :key="s.id" :label="`${s.name}（${s.studentNo || s.id}）`" :value="s.id" />
           </el-select>
@@ -136,7 +136,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { scheduleTimeError } from '@/utils/scheduleTime'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getAllCourses, getAllUsers, getAllStudents } from '@/api'
+import { getSchedules, getSchedule, createSchedule, updateSchedule, deleteSchedule, getAllCourses, getAllUsers, getAllStudents } from '@/api'
 
 const tableData = ref([])
 const courses = ref([])
@@ -147,6 +147,7 @@ const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showAddModal = ref(false)
 const isEdit = ref(false)
 const formRef = ref(null)
+let editRequestId = 0
 
 const form = reactive({
   id: '',
@@ -287,24 +288,32 @@ const toPlainDate = (v) => {
 }
 
 const handleAdd = () => {
+  editRequestId += 1
   isEdit.value = false
   resetForm()
   showAddModal.value = true
 }
 
-const handleEdit = (row) => {
-  isEdit.value = true
-  resetForm()
-  Object.assign(form, row || {})
-  // 兼容旧列名
-  form.seriesName = form.seriesName || row.scheduleName
-  form.recurrenceType = form.recurrenceType || (row.scheduleType === 'RECURRING' ? 'WEEKLY' : 'NONE')
-  form.startDate = form.startDate || toPlainDate(row.startDate)
-  form.endDate = form.endDate || toPlainDate(row.endDate)
-  form.weekDays = String(row.weekdays || row.weekDays || '')
-    .split(',').map(v => v.trim()).filter(Boolean)
-  form.assistantTeacherIds = [row.assistantTeacherId1, row.assistantTeacherId2].filter(Boolean)
-  showAddModal.value = true
+const handleEdit = async (row) => {
+  const requestId = ++editRequestId
+  try {
+    const detail = await getSchedule(row.id)
+    if (requestId !== editRequestId) return
+    isEdit.value = true
+    resetForm()
+    Object.assign(form, detail)
+    form.seriesName = detail.seriesName || detail.scheduleName
+    form.startDate = toPlainDate(detail.startDate)
+    form.endDate = toPlainDate(detail.endDate)
+    form.startTime = detail.startTime?.slice(0, 5) || ''
+    form.endTime = detail.endTime?.slice(0, 5) || ''
+    form.studentIds = (detail.studentIds || []).map(Number)
+    form.weekDays = String(detail.weekdays || '').split(',').map(v => v.trim()).filter(Boolean)
+    form.assistantTeacherIds = [detail.assistantTeacherId1, detail.assistantTeacherId2].filter(Boolean)
+    showAddModal.value = true
+  } catch (err) {
+    if (requestId === editRequestId) ElMessage.error(err?.message || '排课详情加载失败，请重试')
+  }
 }
 
 const handleDelete = async (row) => {

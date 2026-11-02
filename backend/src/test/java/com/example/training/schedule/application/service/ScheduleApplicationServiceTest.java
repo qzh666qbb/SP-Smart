@@ -275,6 +275,38 @@ class ScheduleApplicationServiceTest {
         verify(scheduleRepository, never()).saveLessonStudent(any());
     }
 
+    @Test
+    void scheduleDetailReturnsCurrentStudentsForEditing() {
+        ScheduleSeries series = ScheduleSeries.builder().id(301L).teacherId(21L).build();
+        when(scheduleRepository.findScheduleSeriesById(301L)).thenReturn(Optional.of(series));
+        when(scheduleRepository.findStudentIdsByScheduleSeriesId(301L)).thenReturn(List.of(101L, 102L));
+        assertEquals(List.of(101L, 102L), service.getSchedule(301L, teacher).getStudentIds());
+    }
+
+    @Test
+    void editingScheduleReplacesStudentRosterForUpcomingLesson() {
+        LocalDate date = LocalDate.now().plusDays(7);
+        ScheduleSeries series = ScheduleSeries.builder().id(301L).teacherId(21L).courseId(1L)
+                .recurrenceType("NONE").startDate(date).startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 0)).consumeHours(BigDecimal.ONE).build();
+        when(scheduleRepository.findScheduleSeriesById(301L)).thenReturn(Optional.of(series));
+        when(scheduleRepository.saveScheduleSeries(any())).thenAnswer(i -> i.getArgument(0));
+        when(scheduleRepository.saveLesson(any())).thenAnswer(i -> {
+            Lesson lesson = i.getArgument(0);
+            lesson.setId(401L);
+            return lesson;
+        });
+        ScheduleCreateRequest request = request(List.of(102L));
+        request.setTeacherId(21L);
+        request.setStartDate(date);
+        service.updateSchedule(301L, request, CurrentUser.builder().role("ADMIN").userId(1L).build());
+        verify(scheduleRepository).replaceScheduleSeriesStudents(301L, List.of(102L), 1L);
+        verify(scheduleRepository).softDeletePendingLessonsBySeries(301L, date);
+        ArgumentCaptor<LessonStudent> students = ArgumentCaptor.forClass(LessonStudent.class);
+        verify(scheduleRepository).saveLessonStudent(students.capture());
+        assertEquals(102L, students.getValue().getStudentId());
+    }
+
     private ScheduleCreateRequest request(List<Long> studentIds) {
         return ScheduleCreateRequest.builder()
                 .courseId(1L)

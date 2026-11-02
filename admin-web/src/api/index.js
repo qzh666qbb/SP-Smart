@@ -391,6 +391,8 @@ export const getSchedules = async (params) => {
   }))
 }
 
+export const getSchedule = (id) => service.get(`/business/schedules/${id}`)
+
 export const createSchedule = (params) => callWriteApi(() => service.post('/business/schedules', params), '创建排课成功')
 export const updateSchedule = (id, params) => callWriteApi(() => service.put(`/business/schedules/${id}`, params), '更新排课成功')
 export const deleteSchedule = (id) => callWriteApi(() => service.delete(`/business/schedules/${id}`), '删除排课成功')
