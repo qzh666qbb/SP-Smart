@@ -11,12 +11,11 @@ class LegacyBatchTest {
     @Test void defaultBatchFallbackIsUnambiguousAndDoesNotReopenClosedBatch() {
         var repository = mock(PhysicalTestRepository.class);
         var service = new PhysicalTestApplicationService(repository, null, null, null);
-        when(repository.findBatchById(1L)).thenReturn(Optional.of(PhysicalTestBatch.builder().id(1L).status("COMPLETED").build()));
         when(repository.findAvailableBatches()).thenReturn(List.of(PhysicalTestBatch.builder().id(2L).build()));
         assertEquals(2L, service.resolveLegacyBatchId());
         when(repository.findAvailableBatches()).thenReturn(List.of());
         assertThrows(BusinessException.class, service::resolveLegacyBatchId);
-        when(repository.findAvailableBatches()).thenReturn(List.of(PhysicalTestBatch.builder().id(2L).build(), PhysicalTestBatch.builder().id(3L).build()));
+        when(repository.findAvailableBatches()).thenReturn(List.of(PhysicalTestBatch.builder().id(1L).status("IN_PROGRESS").build(), PhysicalTestBatch.builder().id(3L).status("PENDING").build()));
         assertThrows(BusinessException.class, service::resolveLegacyBatchId);
         verify(repository, never()).saveBatch(any());
     }

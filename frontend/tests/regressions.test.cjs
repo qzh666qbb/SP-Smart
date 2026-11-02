@@ -194,6 +194,7 @@ function appHarness() {
     '@/services/api': { getCurrentUser: () => { requests++; return pending.promise; } },
     '@/store/auth': { __esModule: true, default: store },
     '@/utils/profile': { mergeProfile: (_, incoming) => incoming },
+    '@/utils/update': { registerUpdatePrompt() {} },
     './app.scss': {},
   }).default;
   App({ children: null });
@@ -638,3 +639,78 @@ for (const role of ['TEACHER', 'PARENT']) {
     assert.doesNotThrow(() => h.render());
   });
 }
+
+test('完整资料快照覆盖空值、空孩子名单和已删除资料', () => {
+  const { mergeProfile } = loadModule('src/utils/profile.ts', {});
+  const old = { id: '1', name: '旧姓名', avatar: 'old.png', students: [{ id: 'child' }] };
+  const incoming = { id: '1', name: '', avatar: undefined, students: [] };
+  assert.equal(mergeProfile(old, incoming), incoming);
+  assert.equal(mergeProfile(old, null), null);
+});
+
+for (const children of [[], [{ id: 2, name: '当前孩子' }]]) {
+  test(`个人资料使用服务器孩子列表（${children.length}名）`, async () => {
+    const calls = [];
+    const api = loadModule('src/services/api.ts', {
+      '@/utils/request': { get: async url => {
+        calls.push(url);
+        return url === '/auth/me' ? { userId: 1, profileId: 3, role: 'PARENT' } : children;
+      } },
+      './cloud': { callWithFallback: fn => fn() },
+      '@/utils/pagination': {},
+    });
+    const result = await api.getCurrentUser();
+    assert.deepEqual(calls, ['/auth/me', '/parent/students']);
+    assert.equal(result.profile.students.length, children.length);
+    if (children.length) assert.equal(result.profile.students[0].name, '当前孩子');
+  });
+}
+
+test('新版本准备好后由用户确认重启，取消不会丢失当前操作', () => {
+  let ready, failed, modal, applied = 0, registrations = 0;
+  const updates = loadModule('src/utils/update.ts', {
+    '@tarojs/taro': {
+      getUpdateManager: () => {
+        registrations++;
+        return { onUpdateReady: fn => { ready = fn; }, onUpdateFailed: fn => { failed = fn; }, applyUpdate: () => applied++ };
+      },
+      showModal: options => { modal = options; },
+    },
+  });
+  updates.registerUpdatePrompt();
+  updates.registerUpdatePrompt();
+  assert.equal(registrations, 1);
+  ready();
+  modal.success({ confirm: false });
+  assert.equal(applied, 0);
+  modal.success({ confirm: true });
+  assert.equal(applied, 1);
+  failed();
+  assert.equal(modal.title, '新版本下载失败');
+});
+
+test('返回个人页清除已解绑孩子，旧会话响应不会恢复资料', async () => {
+  const pending = deferred();
+  let response = Promise.resolve({ user: { id: '1', role: 'PARENT' }, profile: { id: 'p', students: [] } });
+  const state = { user: { id: '1', role: 'PARENT' }, profile: { id: 'p', students: [{ id: 'old' }] }, token: 'token', isLoggedIn: true, sessionVersion: 1,
+    syncIdentity(user, profile) { this.user = user; this.profile = profile; } };
+  // Zustand action does not rely on `this` in production.
+  state.syncIdentity = (user, profile) => { state.user = user; state.profile = profile; };
+  const store = () => state;
+  store.getState = () => ({ ...state });
+  const h = pageHarness('src/pages/mine/index.tsx', { getCurrentUser: () => response }, {
+    '@/store/auth': { __esModule: true, default: store },
+    '@/utils/profile': { mergeProfile: (_, value) => value },
+    '@/assets/tabbar/mine-selected.png': 'mine.png',
+    '@/assets/tabbar/schedule-selected.png': 'schedule.png',
+    '@/assets/tabbar/physical-selected.png': 'physical.png',
+  });
+  h.render(); h.show(); await flush();
+  assert.equal(state.profile.students.length, 0);
+  response = pending.promise;
+  h.render(); h.show();
+  state.sessionVersion++; state.isLoggedIn = false; state.profile = null;
+  pending.resolve({ user: { id: '1' }, profile: { id: 'stale' } });
+  await flush();
+  assert.equal(state.profile, null);
+});

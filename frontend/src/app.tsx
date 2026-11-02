@@ -3,6 +3,7 @@ import { useDidShow, useDidHide } from '@tarojs/taro';
 import { getCurrentUser } from '@/services/api';
 import useAuthStore from '@/store/auth';
 import { mergeProfile } from '@/utils/profile';
+import { registerUpdatePrompt } from '@/utils/update';
 // 全局样式
 import './app.scss';
 
@@ -31,6 +32,7 @@ function App(props) {
       });
     return () => { active = false; };
   };
+  useEffect(registerUpdatePrompt, []);
   useEffect(refreshSession, []);
   useDidShow(() => { refreshSession(); });
 

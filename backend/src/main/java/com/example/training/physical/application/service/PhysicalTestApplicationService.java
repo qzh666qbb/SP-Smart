@@ -353,8 +353,6 @@ public class PhysicalTestApplicationService {
     }
 
     public Long resolveLegacyBatchId() {
-        PhysicalTestBatch original = physicalTestRepository.findBatchById(1L).orElse(null);
-        if (original != null && ("PENDING".equals(original.getStatus()) || "IN_PROGRESS".equals(original.getStatus()))) return 1L;
         List<PhysicalTestBatch> available = physicalTestRepository.findAvailableBatches();
         if (available.size() == 1) return available.get(0).getId();
         throw new BusinessException(ErrorCode.PARAM_VALID_ERROR,

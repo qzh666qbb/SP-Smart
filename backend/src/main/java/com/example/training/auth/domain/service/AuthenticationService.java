@@ -76,11 +76,14 @@ public class AuthenticationService {
     public Map<String, Object> loginByWechat(String code, String requestedRole,
                                               String nickname, String avatarUrl) {
         if (code != null && code.startsWith(LegacyWechatTicketService.PREFIX)) {
-            User existing = findByWechatIdentity(legacyWechatTickets.consume(code));
+            WechatGateway.WechatIdentity identity = legacyWechatTickets.consume(code);
+            User existing = findByWechatIdentity(identity);
             if (existing == null) {
-                throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS,
-                        "请使用账号密码登录并绑定微信，或更新小程序后注册");
+                // 老客户端未传角色，不能据此自动建立家长账号或授予教师权限。
+                // 已审核申请中的微信身份可安全关联到管理员创建的教师账号。
+                existing = resolveApprovedTeacher(identity);
             }
+            if (applyWechatFields(existing, identity, nickname, avatarUrl)) existing = userRepository.save(existing);
             ensureExistingTeacherHasProfile(existing);
             ensureEnabled(existing);
             updateLastLogin(existing);
@@ -220,7 +223,7 @@ public class AuthenticationService {
     private User resolveApprovedTeacher(WechatGateway.WechatIdentity identity) {
         TeacherApply apply = teacherRepository.findApplyByOpenid(identity.openid()).orElse(null);
         if (apply == null) {
-            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "教师账号尚未申请或未关联本微信");
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "该微信尚未关联账号，请使用账号密码登录后绑定微信；新家长请更新小程序后选择家长注册");
         }
         if ("PENDING".equals(apply.getStatus())) throw new BusinessException(ErrorCode.TEACHER_APPLY_PENDING);
         if (!"APPROVED".equals(apply.getStatus())) {
@@ -231,6 +234,11 @@ public class AuthenticationService {
         if (!user.isTeacher() || userRepository.findTeacherProfileByUserId(user.getId()).isEmpty()) {
             throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "教师资料尚未完成，请联系管理员");
         }
+        if (user.getWechatOpenid() != null && !user.getWechatOpenid().isBlank()
+                && !user.getWechatOpenid().equals(identity.openid())) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED, "教师账号已绑定其他微信，请联系管理员核对");
+        }
+        ensureEnabled(user);
         applyWechatFields(user, identity, null, null);
         return userRepository.save(user);
     }

@@ -94,6 +94,28 @@ class AuthenticationServiceWechatLoginTest {
     }
 
     @Test
+    void legacyApprovedTeacherCanBindAndLoginWithoutExistingWechatLink() {
+        WechatGateway.WechatIdentity identity = identity("teacher-approved");
+        User teacher = enabledUser(9L, null, "TEACHER");
+        when(legacyWechatTickets.consume("compat_0123456789abcdef0123456789abcdef")).thenReturn(identity);
+        arrangeIdentityEmpty(identity);
+        when(teacherRepository.findApplyByOpenid(identity.openid())).thenReturn(Optional.of(
+                TeacherApply.builder().phone("13900000000").status("APPROVED").build()));
+        when(userRepository.findByPhone("13900000000")).thenReturn(Optional.of(teacher));
+        when(userRepository.findTeacherProfileByUserId(9L)).thenReturn(Optional.of(
+                TeacherProfile.builder().id(19L).userId(9L).build()));
+        when(userRepository.save(teacher)).thenReturn(teacher);
+        when(userRepository.findById(9L)).thenReturn(Optional.of(teacher));
+        arrangeTokens();
+
+        var result = service.loginByWechat("compat_0123456789abcdef0123456789abcdef", "TEACHER", null, null);
+
+        assertEquals(9L, result.get("userId"));
+        assertEquals(19L, result.get("profileId"));
+        assertEquals(identity.openid(), teacher.getWechatOpenid());
+    }
+
+    @Test
     void passwordAccountCanBindWechatWithoutCreatingAnotherUser() {
         WechatGateway.WechatIdentity identity = identity("bind-id6");
         User parent = enabledUser(6L, null, "PARENT");
@@ -240,6 +262,7 @@ class AuthenticationServiceWechatLoginTest {
         when(legacyWechatTickets.consume(ticket)).thenReturn(identity);
         when(userRepository.findByWechatOpenid(identity.openid())).thenReturn(Optional.of(parent));
         when(userRepository.findById(8L)).thenReturn(Optional.of(parent));
+        when(userRepository.save(parent)).thenReturn(parent);
         arrangeTokens();
         var result = service.loginByWechat(ticket, "TEACHER", null, null);
         assertEquals("PARENT", result.get("role"));

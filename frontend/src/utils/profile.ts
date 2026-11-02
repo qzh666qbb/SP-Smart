@@ -2,13 +2,7 @@ import { ParentProfile, TeacherProfile } from '@/types';
 
 type Profile = TeacherProfile | ParentProfile | null;
 
-export function mergeProfile(current: Profile, incoming: Profile): Profile {
-  if (!incoming) return current;
-  if (!current || current.id !== incoming.id) return incoming;
-  const meaningfulEntries = Object.entries(incoming).filter(([key, value]) => {
-    if (value === undefined || value === null || value === '') return false;
-    if (key === 'students' && Array.isArray(value) && value.length === 0) return false;
-    return true;
-  });
-  return { ...current, ...Object.fromEntries(meaningfulEntries) } as Profile;
+// 身份接口返回完整快照；空值、空孩子列表和资料删除都必须覆盖本地缓存。
+export function mergeProfile(_current: Profile, incoming: Profile): Profile {
+  return incoming;
 }

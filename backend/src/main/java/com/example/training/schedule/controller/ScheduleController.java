@@ -161,11 +161,8 @@ public class ScheduleController {
         if ((startDate == null) != (endDate == null)) {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期和结束日期必须同时提供");
         }
-        if (startDate == null) {
-            // 旧版只加载一次且翻月不传范围；保留前一年至后一年的兼容窗口。
-            startDate = LocalDate.now().minusYears(1).withDayOfYear(1);
-            endDate = LocalDate.now().plusYears(1).withMonth(12).withDayOfMonth(31);
-        } else if (startDate.isAfter(endDate)) {
+        // 旧版不传日期且翻月不会重新查询，返回当前已生成的全部授权课次。
+        if (startDate != null && startDate.isAfter(endDate)) {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "开始日期不能晚于结束日期");
         }
         List<Lesson> response = scheduleApplicationService.getLessonsByTeacher(teacherId, startDate, endDate);

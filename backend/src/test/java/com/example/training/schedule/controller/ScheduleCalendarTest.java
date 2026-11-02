@@ -21,10 +21,9 @@ class ScheduleCalendarTest {
             mock(ScheduleCompletionService.class), mock(ParentPermissionService.class), mock(TeacherPermissionService.class));
     private final CurrentUser teacher = CurrentUser.builder().role("TEACHER").profileId(12L).build();
 
-    @Test void legacyCalendarIncludesPreviousAndNextYear() {
+    @Test void legacyCalendarDoesNotTruncateStoredLessons() {
         controller.getLessonsByTeacher(null, null, null, teacher);
-        verify(service).getLessonsByTeacher(12L, LocalDate.now().minusYears(1).withDayOfYear(1),
-                LocalDate.now().plusYears(1).withMonth(12).withDayOfMonth(31));
+        verify(service).getLessonsByTeacher(12L, null, null);
     }
     @Test void explicitCalendarRangeIsPreserved() {
         LocalDate start = LocalDate.of(2026, 11, 1);

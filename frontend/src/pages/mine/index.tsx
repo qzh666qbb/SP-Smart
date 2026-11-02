@@ -8,7 +8,7 @@ import useAuthStore from '@/store/auth';
 import { UserRole, TeacherProfile, ParentProfile } from '@/types';
 import { notifyTabBarActive } from '@/utils/tabbar';
 import BottomNav from '@/components/BottomNav';
-import { bindWechat, logoutSession } from '@/services/api';
+import { bindWechat, logoutSession, getCurrentUser } from '@/services/api';
 import { mergeProfile } from '@/utils/profile';
 import mineIcon from '@/assets/tabbar/mine-selected.png';
 import scheduleIcon from '@/assets/tabbar/schedule-selected.png';
@@ -24,7 +24,18 @@ interface MenuItem {
 }
 
 export default function MinePage() {
-  Taro.useDidShow(() => notifyTabBarActive('/pages/mine/index'));
+  const identityRevision = useRef(0);
+  Taro.useDidShow(() => {
+    notifyTabBarActive('/pages/mine/index');
+    const revision = ++identityRevision.current;
+    const state = useAuthStore.getState();
+    if (!state.isLoggedIn || !state.token) return;
+    getCurrentUser().then(({ user, profile }) => {
+      const latest = useAuthStore.getState();
+      if (revision === identityRevision.current && latest.isLoggedIn
+          && latest.sessionVersion === state.sessionVersion) latest.syncIdentity(user, profile);
+    }).catch(() => { /* 网络失败保留现有显示，认证失效由请求层处理。 */ });
+  });
   const { user, profile, login: updateAuth, logout, isLoggedIn } = useAuthStore();
   const profileUpdateInFlight = useRef(false);
   const lastProfileRequestAt = useRef(0);

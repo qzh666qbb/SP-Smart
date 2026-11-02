@@ -309,6 +309,9 @@ export const getCurrentUser = async (): Promise<{ user: User; profile: TeacherPr
     const body: AnyMap = await get<AnyMap>('/auth/me');
     const user = buildUserFromAuth(body);
     const profile = buildProfileFromAuth(body);
+    if (user.role === 'PARENT' && profile) {
+      (profile as ParentProfile).students = await listParentChildren();
+    }
     return { user, profile };
   }, undefined);
 };

@@ -133,8 +133,8 @@ public class ScheduleRepositoryImpl implements ScheduleRepository {
     @Override
     public List<Lesson> findByTeacherIdAndDateRange(Long teacherId, LocalDate startDate, LocalDate endDate) {
         LambdaQueryWrapper<LessonEntity> wrapper = new LambdaQueryWrapper<LessonEntity>()
-                .ge(LessonEntity::getLessonDate, startDate)
-                .le(LessonEntity::getLessonDate, endDate)
+                .ge(startDate != null, LessonEntity::getLessonDate, startDate)
+                .le(endDate != null, LessonEntity::getLessonDate, endDate)
                 .isNull(LessonEntity::getDeletedAt);
         if (teacherId != null) {
             wrapper.and(w -> w.eq(LessonEntity::getTeacherId, teacherId)
